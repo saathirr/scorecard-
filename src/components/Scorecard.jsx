@@ -16,15 +16,25 @@ const EXTRA_TYPES = [
   { key: 'legbye', label: 'LB' },
 ];
 
-const MAX_BALLS = 24;
 const MAX_WICKETS = 10;
-
 const RUN_BUTTONS = [0, 1, 2, 3, 4, 6];
 
-export default function Scorecard({ teams, players, matchIndex, matches, updateMatch, onBack, onDone }) {
-  const m = matches[matchIndex];
+function snapshot(runs, wickets, balls, batsmanStats, bowlerStats, extras, ballHistory, strikerIdx, currentBatsmen, outPlayers, currentBowler) {
+  return {
+    runs, wickets, balls,
+    batsmanStats: JSON.parse(JSON.stringify(batsmanStats)),
+    bowlerStats: JSON.parse(JSON.stringify(bowlerStats)),
+    extras: { ...extras },
+    ballHistory: ballHistory.map(b => ({ ...b })),
+    strikerIdx, currentBatsmen: [...currentBatsmen], outPlayers: [...outPlayers], currentBowler,
+  };
+}
 
-  const [phase, setPhase] = useState('selectOpeners');
+export default function Scorecard({ teams, players, matchIndex, matches, ballsPerOver, updateMatch, onBack, onDone }) {
+  const m = matches[matchIndex];
+  const MAX_BALLS = ballsPerOver * 4;
+
+  const [phase, setPhase] = useState(m.battingFirst === null ? 'toss' : 'selectOpeners');
   const [currentInnings, setCurrentInnings] = useState(0);
   const [runs, setRuns] = useState(0);
   const [wickets, setWickets] = useState(0);
@@ -45,15 +55,25 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
 
   const [showDismissalModal, setShowDismissalModal] = useState(false);
   const [showRunOutPicker, setShowRunOutPicker] = useState(false);
+  const [showRunOutRuns, setShowRunOutRuns] = useState(false);
   const [showNextBatsman, setShowNextBatsman] = useState(false);
   const [showBowlerSelect, setShowBowlerSelect] = useState(false);
   const [pendingWicketIdx, setPendingWicketIdx] = useState(null);
   const [pendingDismissalType, setPendingDismissalType] = useState(null);
+  const [pendingRunOutRuns, setPendingRunOutRuns] = useState(0);
+
+  const [undoStack, setUndoStack] = useState([]);
+  const [redoStack, setRedoStack] = useState([]);
 
   const historyRef = useRef(null);
 
-  const battingTeam = currentInnings === 0 ? m.t1 : currentInnings === 1 ? m.t2 : m.t1;
-  const bowlingTeam = currentInnings === 0 ? m.t2 : currentInnings === 1 ? m.t1 : m.t2;
+  const battingFirst = m.battingFirst;
+  const battingTeam = battingFirst !== null
+    ? (currentInnings % 2 === 0 ? battingFirst : (m.t1 === battingFirst ? m.t2 : m.t1))
+    : (currentInnings === 0 ? m.t1 : currentInnings === 1 ? m.t2 : m.t1);
+  const bowlingTeam = battingFirst !== null
+    ? (currentInnings % 2 === 0 ? (m.t1 === battingFirst ? m.t2 : m.t1) : battingFirst)
+    : (currentInnings === 0 ? m.t2 : currentInnings === 1 ? m.t1 : m.t2);
   const battingTeamPlayers = players[battingTeam] || [];
   const bowlingTeamPlayers = players[bowlingTeam] || [];
 
@@ -76,13 +96,61 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
   }, [phase, currentInnings]);
 
   useEffect(() => {
-    if (balls > 0 && balls % 6 === 0 && phase === 'scoring') {
+    if (balls > 0 && balls % ballsPerOver === 0 && phase === 'scoring') {
       setStrikerIdx(prev => prev === 0 ? 1 : 0);
     }
   }, [balls]);
 
+  const pushUndo = useCallback(() => {
+    setUndoStack(prev => {
+      const snap = snapshot(runs, wickets, balls, batsmanStats, bowlerStats, extras, ballHistory, strikerIdx, currentBatsmen, outPlayers, currentBowler);
+      const next = [...prev, snap];
+      if (next.length > 50) next.shift();
+      return next;
+    });
+    setRedoStack([]);
+  }, [runs, wickets, balls, batsmanStats, bowlerStats, extras, ballHistory, strikerIdx, currentBatsmen, outPlayers, currentBowler]);
+
+  const handleUndo = useCallback(() => {
+    if (undoStack.length === 0) return;
+    const snap = snapshot(runs, wickets, balls, batsmanStats, bowlerStats, extras, ballHistory, strikerIdx, currentBatsmen, outPlayers, currentBowler);
+    setRedoStack(prev => [...prev, snap]);
+    const prev = undoStack[undoStack.length - 1];
+    setUndoStack(prev => prev.slice(0, -1));
+    setRuns(prev.runs);
+    setWickets(prev.wickets);
+    setBalls(prev.balls);
+    setBatsmanStats(prev.batsmanStats);
+    setBowlerStats(prev.bowlerStats);
+    setExtras(prev.extras);
+    setBallHistory(prev.ballHistory);
+    setStrikerIdx(prev.strikerIdx);
+    setCurrentBatsmen(prev.currentBatsmen);
+    setOutPlayers(prev.outPlayers);
+    setCurrentBowler(prev.currentBowler);
+  }, [undoStack, runs, wickets, balls, batsmanStats, bowlerStats, extras, ballHistory, strikerIdx, currentBatsmen, outPlayers, currentBowler]);
+
+  const handleRedo = useCallback(() => {
+    if (redoStack.length === 0) return;
+    const snap = snapshot(runs, wickets, balls, batsmanStats, bowlerStats, extras, ballHistory, strikerIdx, currentBatsmen, outPlayers, currentBowler);
+    setUndoStack(prev => [...prev, snap]);
+    const next = redoStack[redoStack.length - 1];
+    setRedoStack(prev => prev.slice(0, -1));
+    setRuns(next.runs);
+    setWickets(next.wickets);
+    setBalls(next.balls);
+    setBatsmanStats(next.batsmanStats);
+    setBowlerStats(next.bowlerStats);
+    setExtras(next.extras);
+    setBallHistory(next.ballHistory);
+    setStrikerIdx(next.strikerIdx);
+    setCurrentBatsmen(next.currentBatsmen);
+    setOutPlayers(next.outPlayers);
+    setCurrentBowler(next.currentBowler);
+  }, [redoStack, runs, wickets, balls, batsmanStats, bowlerStats, extras, ballHistory, strikerIdx, currentBatsmen, outPlayers, currentBowler]);
+
   const isInningsOver = balls >= MAX_BALLS || wickets >= MAX_WICKETS;
-  const overStr = `${Math.floor(balls / 6)}.${balls % 6}`;
+  const overStr = `${Math.floor(balls / ballsPerOver)}.${balls % ballsPerOver}`;
   const totalExtras = extras.wide + extras.noball + extras.bye + extras.legbye;
 
   const startInnings = () => {
@@ -100,12 +168,16 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
     setRuns(0); setWickets(0); setBalls(0);
     setExtras({ wide: 0, noball: 0, bye: 0, legbye: 0 });
     setBallHistory([]);
+    setUndoStack([]);
+    setRedoStack([]);
     setPhase('scoring');
   };
 
   const addBowl = useCallback((type, value) => {
     if (isInningsOver || targetAchieved || phase !== 'scoring') return;
     if (type === 'wicket') { setShowDismissalModal(true); return; }
+
+    pushUndo();
 
     const isWideOrNoball = (type === 'extra' && (value === 'wide' || value === 'noball'));
     const runsScored = type === 'run' ? value : (type === 'extra' ? 1 : 0);
@@ -154,12 +226,13 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
       cls: type === 'run' ? (value === 4 ? 'four' : value === 6 ? 'six' : 'run') : 'extra',
       bowler: currentBowler, batsman: thisBatsman,
     }]);
-  }, [isInningsOver, targetAchieved, phase, strikerIdx, currentBatsmen, currentBowler, bowlerStats]);
+  }, [isInningsOver, targetAchieved, phase, strikerIdx, currentBatsmen, currentBowler, bowlerStats, pushUndo]);
 
   const selectDismissalType = (type) => {
     setShowDismissalModal(false);
     if (type === 'runOut') {
       setPendingDismissalType('runOut');
+      setPendingRunOutRuns(0);
       setShowRunOutPicker(true);
     } else {
       setPendingDismissalType(type);
@@ -170,27 +243,41 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
 
   const selectRunOutTarget = (idx) => {
     setShowRunOutPicker(false);
+    setShowRunOutRuns(true);
     setPendingWicketIdx(idx);
-    processWicket(idx, 'runOut');
   };
 
-  const processWicket = (outIdx, type) => {
+  const selectRunOutRuns = (r) => {
+    setShowRunOutRuns(false);
+    setPendingRunOutRuns(r);
+    processWicket(pendingWicketIdx, 'runOut', r);
+  };
+
+  const processWicket = (outIdx, type, extraRuns = 0) => {
     setPendingDismissalType(type);
     setPendingWicketIdx(outIdx);
+    setPendingRunOutRuns(extraRuns);
 
     if (availableBatsmen.length > 0) {
       setShowNextBatsman(true);
     } else {
-      finalizeWicket(outIdx, type, null);
+      finalizeWicket(outIdx, type, null, extraRuns);
     }
   };
 
   const selectNextBatsman = (name) => {
     setShowNextBatsman(false);
-    finalizeWicket(pendingWicketIdx, pendingDismissalType, name);
+    finalizeWicket(pendingWicketIdx, pendingDismissalType, name, pendingRunOutRuns);
   };
 
-  const finalizeWicket = (outIdx, type, nextName) => {
+  const swapStrike = useCallback(() => {
+    if (phase !== 'scoring') return;
+    pushUndo();
+    setStrikerIdx(prev => prev === 0 ? 1 : 0);
+  }, [phase, pushUndo]);
+
+  const finalizeWicket = (outIdx, type, nextName, extraRuns = 0) => {
+    pushUndo();
     const outBatsman = currentBatsmen[outIdx];
 
     setBatsmanStats(prev => {
@@ -203,16 +290,43 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
     setOutPlayers(prev => [...prev, outBatsman]);
     setWickets(prev => prev + 1);
     setBalls(prev => prev + 1);
+    setRuns(prev => prev + extraRuns);
 
-    if (currentBowler && bowlerStats[currentBowler]) {
-      setBowlerStats(prev => {
+    if (extraRuns > 0 && currentBatsmen[strikerIdx] && strikerIdx !== outIdx && strikerIdx < currentBatsmen.length) {
+      setBatsmanStats(prev => {
         const next = { ...prev };
-        next[currentBowler] = { ...next[currentBowler], wickets: next[currentBowler].wickets + 1, balls: next[currentBowler].balls + 1 };
+        const nonStriker = currentBatsmen[strikerIdx];
+        if (next[nonStriker]) {
+          next[nonStriker] = { ...next[nonStriker], runs: next[nonStriker].runs + extraRuns };
+        }
+        return next;
+      });
+    } else if (extraRuns > 0 && outIdx === strikerIdx) {
+      setBatsmanStats(prev => {
+        const next = { ...prev };
+        if (next[outBatsman]) {
+          next[outBatsman] = { ...next[outBatsman], runs: next[outBatsman].runs + extraRuns };
+        }
         return next;
       });
     }
 
-    setBallHistory(prev => [...prev, { label: 'W', cls: 'wicket', bowler: currentBowler, batsman: outBatsman, dismissal: type }]);
+    if (currentBowler && bowlerStats[currentBowler]) {
+      setBowlerStats(prev => {
+        const next = { ...prev };
+        next[currentBowler] = {
+          ...next[currentBowler],
+          wickets: next[currentBowler].wickets + 1,
+          balls: next[currentBowler].balls + 1,
+          runs: next[currentBowler].runs + extraRuns,
+        };
+        return next;
+      });
+    }
+
+    let runLabel = type === 'runOut' && extraRuns > 0 ? `RO+${extraRuns}` : 'W';
+    if (type === 'runOut') runLabel = extraRuns > 0 ? `RO+${extraRuns}` : 'RO';
+    setBallHistory(prev => [...prev, { label: runLabel, cls: 'wicket', bowler: currentBowler, batsman: outBatsman, dismissal: type }]);
 
     if (nextName) {
       const newBatsmen = [...currentBatsmen];
@@ -222,6 +336,7 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
 
     setPendingWicketIdx(null);
     setPendingDismissalType(null);
+    setPendingRunOutRuns(0);
   };
 
   const changeBowler = (name) => {
@@ -253,6 +368,8 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
     setBatsmanStats({});
     setBowlerStats({});
     setOutPlayers([]);
+    setUndoStack([]);
+    setRedoStack([]);
     setPhase('selectOpeners');
   }, []);
 
@@ -264,9 +381,11 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
     if (finalInnings.length >= 2) {
       const inn1 = finalInnings[0];
       const inn2 = finalInnings[1];
+      const inn1Team = teams[inn1.battingTeam];
+      const inn2Team = teams[inn2.battingTeam];
       let result = '';
-      if (inn1.runs > inn2.runs) result = `${teams[m.t1]} won by ${inn1.runs - inn2.runs} runs`;
-      else if (inn2.runs > inn1.runs) result = `${teams[m.t2]} won by ${10 - inn2.wickets} wicket${10 - inn2.wickets !== 1 ? 's' : ''}`;
+      if (inn1.runs > inn2.runs) result = `${inn1Team} won by ${inn1.runs - inn2.runs} runs`;
+      else if (inn2.runs > inn1.runs) result = `${inn2Team} won by ${10 - inn2.wickets} wicket${10 - inn2.wickets !== 1 ? 's' : ''}`;
       else result = 'Match Tied!';
       updateMatch(matchIndex, { innings: finalInnings, completed: true, result });
     } else {
@@ -288,9 +407,36 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
     setBallHistory([]);
     setExtras({ wide: 0, noball: 0, bye: 0, legbye: 0 });
     setCurrentBowler('');
+    setUndoStack([]);
+    setRedoStack([]);
     setPhase('selectOpeners');
     updateMatch(matchIndex, { innings: [], completed: false, result: '' });
   }, [matchIndex, updateMatch]);
+
+  // === Toss Phase ===
+  if (phase === 'toss') {
+    return (
+      <div className="screen">
+        <div className="screen-header">
+          <button className="btn-back" onClick={onBack}>←</button>
+          <h2>Who bats first?</h2>
+        </div>
+        <p style={{ textAlign: 'center', color: 'var(--muted)', fontSize: '13px', marginBottom: '24px' }}>
+          {teams[m.t1]} vs {teams[m.t2]}
+        </p>
+        <div className="toss-grid">
+          <button className="toss-btn" onClick={() => { updateMatch(matchIndex, { battingFirst: m.t1 }); setPhase('selectOpeners'); }}>
+            <span className="toss-team">{teams[m.t1]}</span>
+            <span className="toss-action">Bat First</span>
+          </button>
+          <button className="toss-btn" onClick={() => { updateMatch(matchIndex, { battingFirst: m.t2 }); setPhase('selectOpeners'); }}>
+            <span className="toss-team">{teams[m.t2]}</span>
+            <span className="toss-action">Bat First</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // === Select Openers Phase ===
   if (phase === 'selectOpeners') {
@@ -301,7 +447,7 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
           <h2>Select Openers</h2>
         </div>
         <p style={{ textAlign: 'center', color: 'var(--muted)', fontSize: '13px', marginBottom: '16px' }}>
-          {teams[battingTeam]} — Pick 2 openers &amp; bowler
+          {teams[battingTeam]} — Pick 2 openers &amp; bowler ({ballsPerOver} balls/over)
         </p>
         <div className="opener-grid">
           {battingTeamPlayers.map(p => (
@@ -340,7 +486,7 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
     const inn = innings[innings.length - 1];
     const batStats = Object.entries(inn.batsmanStats || {});
     const bowlStats = Object.entries(inn.bowlerStats || {}).filter(([_, v]) => v.balls > 0);
-    const innOvers = `${Math.floor(inn.balls / 6)}.${inn.balls % 6}`;
+    const innOvers = `${Math.floor(inn.balls / ballsPerOver)}.${inn.balls % ballsPerOver}`;
 
     return (
       <div className="screen">
@@ -396,8 +542,8 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
                 <span className="sheet-stat">Econ</span>
               </div>
               {bowlStats.map(([name, s]) => {
-                const overs = `${Math.floor(s.balls / 6)}.${s.balls % 6}`;
-                const econ = s.balls > 0 ? (s.runs / (s.balls / 6)).toFixed(1) : '-';
+                const overs = `${Math.floor(s.balls / ballsPerOver)}.${s.balls % ballsPerOver}`;
+                const econ = s.balls > 0 ? (s.runs / (s.balls / ballsPerOver)).toFixed(1) : '-';
                 return (
                   <div className="sheet-row" key={name}>
                     <span className="sheet-name">{name}</span>
@@ -428,7 +574,11 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
       <div className="screen-header">
         <button className="btn-back" onClick={onBack}>←</button>
         <h2>{teams[m.t1]} vs {teams[m.t2]}</h2>
-        <button className="btn-sm" onClick={resetMatch} title="Reset">↻</button>
+        <div style={{ display: 'flex', gap: '4px' }}>
+          <button className="btn-sm" onClick={handleUndo} disabled={undoStack.length === 0} title="Undo">↩</button>
+          <button className="btn-sm" onClick={handleRedo} disabled={redoStack.length === 0} title="Redo">↪</button>
+          <button className="btn-sm" onClick={resetMatch} title="Reset">↻</button>
+        </div>
       </div>
 
       {/* Target bar for 2nd innings */}
@@ -482,6 +632,10 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
           <span className="score">{batsmanStats[currentBatsmen[1]]?.runs || 0} ({batsmanStats[currentBatsmen[1]]?.balls || 0})</span>
         </div>
 
+        <button className="swap-strike-btn" onClick={swapStrike} disabled={phase !== 'scoring'}>
+          ⟳ Swap Strike
+        </button>
+
         {availableBatsmen.length > 0 && (
           <div className="remaining-count">{availableBatsmen.length} player{availableBatsmen.length !== 1 ? 's' : ''} yet to bat</div>
         )}
@@ -493,7 +647,7 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
         </div>
         {currentBowler && bowlerStats[currentBowler] && (
           <div className="bowler-figures">
-            {Math.floor(bowlerStats[currentBowler].balls / 6)}.{bowlerStats[currentBowler].balls % 6} ov • {bowlerStats[currentBowler].runs} r • {bowlerStats[currentBowler].wickets} w
+            {Math.floor(bowlerStats[currentBowler].balls / ballsPerOver)}.{bowlerStats[currentBowler].balls % ballsPerOver} ov • {bowlerStats[currentBowler].runs} r • {bowlerStats[currentBowler].wickets} w
           </div>
         )}
 
@@ -514,10 +668,10 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
 
       {ballHistory.length > 0 && (
         <div className="over-history">
-          <h4>Ball-by-Ball • Over {Math.floor(balls / 6) + (balls % 6 > 0 ? 1 : 0)}</h4>
+          <h4>Ball-by-Ball • Over {Math.floor(balls / ballsPerOver) + (balls % ballsPerOver > 0 ? 1 : 0)}</h4>
           <div className="ball-history" ref={historyRef}>
             {ballHistory.map((b, i) => {
-              const isOverEnd = (i + 1) % 6 === 0 && i + 1 < ballHistory.length;
+              const isOverEnd = (i + 1) % ballsPerOver === 0 && i + 1 < ballHistory.length;
               return (
                 <span key={i}>
                   <span className={`ball-chip ${b.cls}`} title={`${b.bowler} to ${b.batsman}`}>{b.label}</span>
@@ -574,6 +728,23 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
         </div>
       )}
 
+      {/* Run Out Runs Modal */}
+      {showRunOutRuns && (
+        <div className="modal-overlay" onClick={() => setShowRunOutRuns(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h3>Runs scored on the play</h3>
+            <div className="runout-runs-grid">
+              {[0, 1, 2, 3].map(r => (
+                <button key={r} className="dismissal-btn" onClick={() => selectRunOutRuns(r)}>
+                  {r} {r === 0 ? 'run' : r === 1 ? 'run' : 'runs'}
+                </button>
+              ))}
+            </div>
+            <button className="btn-secondary" style={{ marginTop: '12px', width: '100%' }} onClick={() => setShowRunOutRuns(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
       {/* Next Batsman Modal */}
       {showNextBatsman && (
         <div className="modal-overlay" onClick={() => setShowNextBatsman(false)}>
@@ -605,7 +776,7 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
             <div className="bowler-grid">
               {bowlingTeamPlayers.map(p => {
                 const s = bowlerStats[p];
-                const fig = s ? `${Math.floor(s.balls / 6)}.${s.balls % 6} ov • ${s.runs}/${s.wickets}` : '';
+                const fig = s ? `${Math.floor(s.balls / ballsPerOver)}.${s.balls % ballsPerOver} ov • ${s.runs}/${s.wickets}` : '';
                 return (
                   <button key={p} className={`bowler-option ${currentBowler === p ? 'active' : ''}`} onClick={() => changeBowler(p)}>
                     <span className="bowler-opt-name">{p}</span>

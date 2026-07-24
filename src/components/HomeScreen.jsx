@@ -4,10 +4,14 @@ export default function HomeScreen({ onStart }) {
   const [t1, setT1] = useState('Team Alpha');
   const [t2, setT2] = useState('Team Beta');
   const [t3, setT3] = useState('Team Gamma');
+  const [ballsPerOver, setBallsPerOver] = useState(6);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onStart([t1.trim() || 'Team Alpha', t2.trim() || 'Team Beta', t3.trim() || 'Team Gamma']);
+    onStart(
+      [t1.trim() || 'Team Alpha', t2.trim() || 'Team Beta', t3.trim() || 'Team Gamma'],
+      ballsPerOver
+    );
   };
 
   return (
@@ -53,6 +57,29 @@ export default function HomeScreen({ onStart }) {
             </div>
           ))}
         </div>
+
+        <div className="format-selector">
+          <h3>Match Format</h3>
+          <div className="format-options">
+            <button
+              type="button"
+              className={`format-btn ${ballsPerOver === 5 ? 'active' : ''}`}
+              onClick={() => setBallsPerOver(5)}
+            >
+              <span className="format-label">5 Balls/Over</span>
+              <span className="format-desc">20 balls per innings</span>
+            </button>
+            <button
+              type="button"
+              className={`format-btn ${ballsPerOver === 6 ? 'active' : ''}`}
+              onClick={() => setBallsPerOver(6)}
+            >
+              <span className="format-label">6 Balls/Over</span>
+              <span className="format-desc">24 balls per innings</span>
+            </button>
+          </div>
+        </div>
+
         <button type="submit" className="btn-primary">Next → Add Players</button>
       </form>
     </div>

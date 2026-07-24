@@ -32,7 +32,7 @@ function aggregateStats(matches, teams) {
   return playerStats;
 }
 
-export default function SummaryScreen({ teams, matches, onNew }) {
+export default function SummaryScreen({ teams, matches, ballsPerOver, onNew }) {
   const playerStats = aggregateStats(matches, teams);
 
   const points = {};
@@ -41,9 +41,11 @@ export default function SummaryScreen({ teams, matches, onNew }) {
     if ((m.innings || []).length >= 2) {
       const inn1 = m.innings[0];
       const inn2 = m.innings[1];
-      if (inn1.runs > inn2.runs) points[teams[m.t1]] += 2;
-      else if (inn2.runs > inn1.runs) points[teams[m.t2]] += 2;
-      else { points[teams[m.t1]] += 1; points[teams[m.t2]] += 1; }
+      const team1 = teams[inn1.battingTeam];
+      const team2 = teams[inn2.battingTeam];
+      if (inn1.runs > inn2.runs) points[team1] += 2;
+      else if (inn2.runs > inn1.runs) points[team2] += 2;
+      else { points[team1] += 1; points[team2] += 1; }
     }
   });
   const sorted = Object.entries(points).sort((a, b) => b[1] - a[1]);
@@ -83,7 +85,7 @@ export default function SummaryScreen({ teams, matches, onNew }) {
             <div className="summary-match" key={i}>
               <h4>Match {i + 1}: {teams[m.t1]} vs {teams[m.t2]}</h4>
               {m.innings.map((inn, j) => {
-                const overs = `${Math.floor(inn.balls / 6)}.${inn.balls % 6}`;
+                const overs = `${Math.floor(inn.balls / ballsPerOver)}.${inn.balls % ballsPerOver}`;
                 const batStats = Object.entries(inn.batsmanStats || {});
                 const bowlStats = Object.entries(inn.bowlerStats || {}).filter(([_, v]) => v.balls > 0);
                 return (
@@ -112,7 +114,7 @@ export default function SummaryScreen({ teams, matches, onNew }) {
                       <div className="mini-sheet bowl">
                         <div className="mini-sheet-label">Bowling:</div>
                         {bowlStats.map(([name, s]) => {
-                          const ov = `${Math.floor(s.balls / 6)}.${s.balls % 6}`;
+                          const ov = `${Math.floor(s.balls / ballsPerOver)}.${s.balls % ballsPerOver}`;
                           return (
                             <div className="mini-sheet-row" key={name}>
                               <span className="mini-name">{name}</span>
@@ -164,8 +166,8 @@ export default function SummaryScreen({ teams, matches, onNew }) {
         <div className="stats-section">
           <h3>🎯 Most Wickets (Purple Cap)</h3>
           {topWickets.map(([name, s], i) => {
-            const overs = `${Math.floor(s.bowlingBalls / 6)}.${s.bowlingBalls % 6}`;
-            const econ = s.bowlingBalls > 0 ? (s.bowlingRuns / (s.bowlingBalls / 6)).toFixed(1) : '-';
+            const overs = `${Math.floor(s.bowlingBalls / ballsPerOver)}.${s.bowlingBalls % ballsPerOver}`;
+            const econ = s.bowlingBalls > 0 ? (s.bowlingRuns / (s.bowlingBalls / ballsPerOver)).toFixed(1) : '-';
             return (
               <div className="stat-row" key={name} style={{ animationDelay: `${i * 0.1}s` }}>
                 <span className="stat-rank">{i + 1}</span>
@@ -225,7 +227,7 @@ export default function SummaryScreen({ teams, matches, onNew }) {
     if (!m.innings || m.innings.length === 0) return;
     html += `<h2>Match ${i + 1}: ${teams[m.t1]} vs ${teams[m.t2]}</h2>`;
     m.innings.forEach((inn, j) => {
-      const overs = `${Math.floor(inn.balls / 6)}.${inn.balls % 6}`;
+      const overs = `${Math.floor(inn.balls / ballsPerOver)}.${inn.balls % ballsPerOver}`;
       html += `<div class="match"><div class="match-title">${teams[inn.battingTeam]}: ${inn.runs}/${inn.wickets} (${overs} ov)</div>`;
       const batStats = Object.entries(inn.batsmanStats || {});
       if (batStats.length > 0) {
@@ -241,8 +243,8 @@ export default function SummaryScreen({ teams, matches, onNew }) {
       if (bowlStats.length > 0) {
         html += `<table><tr><th>Bowler</th><th>O</th><th>R</th><th>W</th><th>Econ</th></tr>`;
         bowlStats.forEach(([name, s]) => {
-          const ov = `${Math.floor(s.balls / 6)}.${s.balls % 6}`;
-          const econ = s.balls > 0 ? (s.runs / (s.balls / 6)).toFixed(1) : '-';
+          const ov = `${Math.floor(s.balls / ballsPerOver)}.${s.balls % ballsPerOver}`;
+          const econ = s.balls > 0 ? (s.runs / (s.balls / ballsPerOver)).toFixed(1) : '-';
           html += `<tr><td>${name}</td><td>${ov}</td><td>${s.runs}</td><td>${s.wickets}</td><td>${econ}</td></tr>`;
         });
         html += `</table>`;
@@ -295,7 +297,7 @@ export default function SummaryScreen({ teams, matches, onNew }) {
             if (!m.innings || m.innings.length === 0) return;
             text += `*Match ${i + 1}: ${teams[m.t1]} vs ${teams[m.t2]}*\n`;
             m.innings.forEach((inn, j) => {
-              const overs = `${Math.floor(inn.balls / 6)}.${inn.balls % 6}`;
+              const overs = `${Math.floor(inn.balls / ballsPerOver)}.${inn.balls % ballsPerOver}`;
               text += `${teams[inn.battingTeam]}: ${inn.runs}/${inn.wickets} (${overs} ov)\n`;
               const batStats = Object.entries(inn.batsmanStats || {});
               batStats.forEach(([name, s]) => {

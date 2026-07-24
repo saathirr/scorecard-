@@ -14,11 +14,13 @@ export default function App() {
   const [matches, setMatches] = useState([]);
   const [currentMatch, setCurrentMatch] = useState(null);
   const [dayFinished, setDayFinished] = useState(false);
+  const [ballsPerOver, setBallsPerOver] = useState(6);
 
   const go = useCallback((s) => setScreen(s), []);
 
-  const handleTeamsSubmit = useCallback((names) => {
+  const handleTeamsSubmit = useCallback((names, bpo) => {
     setTeams(names);
+    setBallsPerOver(bpo);
     setPlayers({ 0: [], 1: [], 2: [] });
     go(SCREENS.PLAYER_SETUP);
   }, [go]);
@@ -29,9 +31,22 @@ export default function App() {
     go(SCREENS.MATCH_SELECT);
   }, [go]);
 
-  const addMatch = useCallback((t1, t2) => {
-    setMatches(prev => [...prev, { t1, t2, completed: false, innings: [], result: '' }]);
+  const updatePlayers = useCallback((p) => {
+    setPlayers(p);
   }, []);
+
+  const addMatch = useCallback((t1, t2) => {
+    setMatches(prev => [...prev, { t1, t2, completed: false, innings: [], result: '', battingFirst: null }]);
+  }, []);
+
+  const deleteMatch = useCallback((idx) => {
+    setMatches(prev => prev.filter((_, i) => i !== idx));
+    if (currentMatch === idx) {
+      setCurrentMatch(null);
+    } else if (currentMatch > idx) {
+      setCurrentMatch(prev => prev - 1);
+    }
+  }, [currentMatch]);
 
   const openMatch = useCallback((idx) => {
     setCurrentMatch(idx);
@@ -66,6 +81,7 @@ export default function App() {
     setMatches([]);
     setCurrentMatch(null);
     setDayFinished(false);
+    setBallsPerOver(6);
     go(SCREENS.HOME);
   }, [go]);
 
@@ -76,7 +92,7 @@ export default function App() {
         <PlayerSetup teams={teams} players={players} onStart={handlePlayersSubmit} onBack={() => go(SCREENS.HOME)} />
       )}
       {screen === SCREENS.MATCH_SELECT && (
-        <MatchSelect teams={teams} matches={matches} onSelect={openMatch} onBack={resetAll} onUpdateFixture={updateFixture} onAddMatch={addMatch} onViewResults={finishDay} />
+        <MatchSelect teams={teams} players={players} onUpdatePlayers={updatePlayers} matches={matches} onSelect={openMatch} onBack={resetAll} onUpdateFixture={updateFixture} onAddMatch={addMatch} onDeleteMatch={deleteMatch} onViewResults={finishDay} />
       )}
       {screen === SCREENS.SCORECARD && (
         <Scorecard
@@ -85,12 +101,13 @@ export default function App() {
           players={players}
           matchIndex={currentMatch}
           matches={matches}
+          ballsPerOver={ballsPerOver}
           updateMatch={updateMatch}
           onBack={() => go(SCREENS.MATCH_SELECT)}
           onDone={() => go(SCREENS.MATCH_SELECT)}
         />
       )}
-      {screen === SCREENS.SUMMARY && <SummaryScreen teams={teams} matches={matches} onNew={resetAll} />}
+      {screen === SCREENS.SUMMARY && <SummaryScreen teams={teams} matches={matches} ballsPerOver={ballsPerOver} onNew={resetAll} />}
     </div>
   );
 }
