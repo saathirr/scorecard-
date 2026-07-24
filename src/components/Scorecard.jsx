@@ -75,6 +75,12 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
     }
   }, [phase, currentInnings]);
 
+  useEffect(() => {
+    if (balls > 0 && balls % 6 === 0 && phase === 'scoring') {
+      setStrikerIdx(prev => prev === 0 ? 1 : 0);
+    }
+  }, [balls]);
+
   const isInningsOver = balls >= MAX_BALLS || wickets >= MAX_WICKETS;
   const overStr = `${Math.floor(balls / 6)}.${balls % 6}`;
   const totalExtras = extras.wide + extras.noball + extras.bye + extras.legbye;
