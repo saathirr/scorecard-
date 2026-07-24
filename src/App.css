@@ -240,6 +240,22 @@ html, body {
 
 .match-card .status-badge.done { background: rgba(0,200,83,0.15); color: var(--green); }
 .match-card .status-badge.pending { background: rgba(245,197,24,0.15); color: var(--gold); }
+.match-card .match-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; font-weight: 600; }
+
+/* Add Match */
+.add-match-section {
+  background: var(--bg3);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+}
+.add-match-section h4 { font-size: 13px; color: var(--muted); margin-bottom: 10px; font-weight: 600; }
+.add-match-section .fixture-selector select { padding: 10px; font-size: 14px; }
+.add-match-section .btn-sm { padding: 10px 16px; white-space: nowrap; }
+
+/* Finished day */
+.finished-day-section { margin-top: 10px; }
 
 /* Scorecard */
 .timer-bar {

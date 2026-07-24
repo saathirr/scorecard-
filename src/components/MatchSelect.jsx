@@ -1,7 +1,15 @@
-export default function MatchSelect({ teams, matches, onSelect, onBack, onUpdateFixture, onViewResults }) {
+import { useState } from 'react';
+
+export default function MatchSelect({ teams, matches, onSelect, onBack, onUpdateFixture, onAddMatch, onViewResults }) {
   const anyStarted = matches.some(m => m.innings && m.innings.length > 0);
-  const allDone = matches.length > 0 && matches.every(m => m.completed);
   const anyPlayed = matches.some(m => m.innings && m.innings.length > 0);
+  const [newT1, setNewT1] = useState(0);
+  const [newT2, setNewT2] = useState(1);
+
+  const handleAdd = () => {
+    if (newT1 === newT2) return;
+    onAddMatch(newT1, newT2);
+  };
 
   return (
     <div className="screen">
@@ -10,45 +18,39 @@ export default function MatchSelect({ teams, matches, onSelect, onBack, onUpdate
         <h2>Select Match</h2>
       </div>
 
-      {!anyStarted && (
-        <p style={{ textAlign: 'center', color: 'var(--muted)', fontSize: '13px', marginBottom: '16px' }}>
-          Customize which teams play each match
-        </p>
-      )}
+      {/* Add new match */}
+      <div className="add-match-section">
+        <h4>Add Match</h4>
+        <div className="fixture-selector">
+          <select value={newT1} onChange={e => setNewT1(Number(e.target.value))}>
+            {teams.map((t, i) => <option key={i} value={i}>{t}</option>)}
+          </select>
+          <span className="vs">vs</span>
+          <select value={newT2} onChange={e => setNewT2(Number(e.target.value))}>
+            {teams.map((t, i) => (
+              <option key={i} value={i} disabled={i === newT1}>{t}</option>
+            ))}
+          </select>
+          <button className="btn-sm gold" onClick={handleAdd} disabled={newT1 === newT2}>+ Add</button>
+        </div>
+      </div>
 
-      <div className="match-list">
-        {['Match 1', 'Match 2', 'Match 3'].map((label, i) => {
-          const m = matches[i];
-          return (
+      {/* Match list */}
+      {matches.length === 0 ? (
+        <p style={{ textAlign: 'center', color: 'var(--muted)', fontSize: '14px', margin: '30px 0' }}>
+          Add a match above to get started
+        </p>
+      ) : (
+        <div className="match-list">
+          {matches.map((m, i) => (
             <div
               key={i}
               className={`match-card ${m.completed ? 'completed' : ''}`}
               onClick={() => !m.completed && onSelect(i)}
             >
               <div style={{ flex: 1 }}>
-                {!anyStarted ? (
-                  <div className="fixture-selector">
-                    <select
-                      value={m.t1}
-                      onChange={(e) => onUpdateFixture(i, Number(e.target.value), m.t2)}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {teams.map((t, idx) => <option key={idx} value={idx}>{t}</option>)}
-                    </select>
-                    <span className="vs">vs</span>
-                    <select
-                      value={m.t2}
-                      onChange={(e) => onUpdateFixture(i, m.t1, Number(e.target.value))}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {teams.map((t, idx) => (
-                        <option key={idx} value={idx} disabled={idx === m.t1}>{t}</option>
-                      ))}
-                    </select>
-                  </div>
-                ) : (
-                  <div className="teams">{teams[m.t1]} vs {teams[m.t2]}</div>
-                )}
+                <div className="match-label">Match {i + 1}</div>
+                <div className="teams">{teams[m.t1]} vs {teams[m.t2]}</div>
                 {m.result && <div className="match-result">{m.result}</div>}
               </div>
               {m.completed ? (
@@ -57,19 +59,17 @@ export default function MatchSelect({ teams, matches, onSelect, onBack, onUpdate
                 <span className="arrow">▶</span>
               )}
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
 
-      {allDone ? (
-        <button className="btn-primary" style={{ marginTop: '20px' }} onClick={onViewResults}>
-          🏆 View Tournament Results →
-        </button>
-      ) : anyPlayed ? (
-        <button className="btn-secondary" style={{ marginTop: '20px', width: '100%' }} onClick={onViewResults}>
-          🏁 Finished Day — View Results So Far
-        </button>
-      ) : null}
+      {matches.length > 0 && (
+        <div className="finished-day-section">
+          <button className="btn-primary" style={{ marginTop: '20px' }} onClick={onViewResults}>
+            🏁 Finished Day — View Results
+          </button>
+        </div>
+      )}
     </div>
   );
 }

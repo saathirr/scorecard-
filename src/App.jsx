@@ -25,14 +25,13 @@ export default function App() {
 
   const handlePlayersSubmit = useCallback((p) => {
     setPlayers(p);
-    const m = [
-      { t1: 0, t2: 1, completed: false, innings: [], result: '' },
-      { t1: 1, t2: 2, completed: false, innings: [], result: '' },
-      { t1: 2, t2: 0, completed: false, innings: [], result: '' }
-    ];
-    setMatches(m);
+    setMatches([]);
     go(SCREENS.MATCH_SELECT);
   }, [go]);
+
+  const addMatch = useCallback((t1, t2) => {
+    setMatches(prev => [...prev, { t1, t2, completed: false, innings: [], result: '' }]);
+  }, []);
 
   const openMatch = useCallback((idx) => {
     setCurrentMatch(idx);
@@ -77,7 +76,7 @@ export default function App() {
         <PlayerSetup teams={teams} players={players} onStart={handlePlayersSubmit} onBack={() => go(SCREENS.HOME)} />
       )}
       {screen === SCREENS.MATCH_SELECT && (
-        <MatchSelect teams={teams} matches={matches} onSelect={openMatch} onBack={resetAll} onUpdateFixture={updateFixture} onViewResults={finishDay} />
+        <MatchSelect teams={teams} matches={matches} onSelect={openMatch} onBack={resetAll} onUpdateFixture={updateFixture} onAddMatch={addMatch} onViewResults={finishDay} />
       )}
       {screen === SCREENS.SCORECARD && (
         <Scorecard
