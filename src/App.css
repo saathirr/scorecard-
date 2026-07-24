@@ -341,7 +341,8 @@ html, body {
 }
 
 .batsmen-strip:last-of-type { border-bottom: none; }
-.batsmen-strip .name { display: flex; align-items: center; gap: 6px; }
+.batsmen-strip .name { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 4px 0; border-radius: 8px; transition: background 0.15s; }
+.batsmen-strip .name:hover { background: var(--bg2); }
 .batsmen-strip .name .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); display: none; }
 .batsmen-strip .name .dot.active { display: inline-block; animation: pulse 1s infinite; }
 .batsmen-strip .score { color: var(--gold); font-weight: 600; }

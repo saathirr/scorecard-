@@ -58,6 +58,8 @@ export default function Scorecard({ teams, players, matchIndex, matches, ballsPe
   const [showRunOutRuns, setShowRunOutRuns] = useState(false);
   const [showNextBatsman, setShowNextBatsman] = useState(false);
   const [showBowlerSelect, setShowBowlerSelect] = useState(false);
+  const [showReplaceBatsman, setShowReplaceBatsman] = useState(false);
+  const [replaceBatsmanIdx, setReplaceBatsmanIdx] = useState(null);
   const [pendingWicketIdx, setPendingWicketIdx] = useState(null);
   const [pendingDismissalType, setPendingDismissalType] = useState(null);
   const [pendingRunOutRuns, setPendingRunOutRuns] = useState(0);
@@ -275,6 +277,22 @@ export default function Scorecard({ teams, players, matchIndex, matches, ballsPe
     pushUndo();
     setStrikerIdx(prev => prev === 0 ? 1 : 0);
   }, [phase, pushUndo]);
+
+  const openReplaceBatsman = useCallback((idx) => {
+    if (phase !== 'scoring' || availableBatsmen.length === 0) return;
+    setReplaceBatsmanIdx(idx);
+    setShowReplaceBatsman(true);
+  }, [phase, availableBatsmen.length]);
+
+  const doReplaceBatsman = useCallback((name) => {
+    setShowReplaceBatsman(false);
+    pushUndo();
+    const newBatsmen = [...currentBatsmen];
+    newBatsmen[replaceBatsmanIdx] = name;
+    setCurrentBatsmen(newBatsmen);
+    setBatsmanStats(prev => ({ ...prev, [name]: { ...prev[name], runs: 0, balls: 0, fours: 0, sixes: 0, isOut: false, dismissal: null, dismissedBy: null } }));
+    setReplaceBatsmanIdx(null);
+  }, [replaceBatsmanIdx, currentBatsmen, pushUndo]);
 
   const finalizeWicket = (outIdx, type, nextName, extraRuns = 0) => {
     pushUndo();
@@ -616,7 +634,7 @@ export default function Scorecard({ teams, players, matchIndex, matches, ballsPe
         )}
 
         <div className="batsmen-strip">
-          <span className="name">
+          <span className="name" onClick={() => openReplaceBatsman(0)} style={{ cursor: availableBatsmen.length > 0 ? 'pointer' : 'default' }}>
             {strikerIdx === 0 && <span className="dot active" />}
             {currentBatsmen[0] || 'Batsman 1'}
             {batsmanStats[currentBatsmen[0]]?.isOut && <span className="out-badge">OUT</span>}
@@ -624,7 +642,7 @@ export default function Scorecard({ teams, players, matchIndex, matches, ballsPe
           <span className="score">{batsmanStats[currentBatsmen[0]]?.runs || 0} ({batsmanStats[currentBatsmen[0]]?.balls || 0})</span>
         </div>
         <div className="batsmen-strip">
-          <span className="name">
+          <span className="name" onClick={() => openReplaceBatsman(1)} style={{ cursor: availableBatsmen.length > 0 ? 'pointer' : 'default' }}>
             {strikerIdx === 1 && <span className="dot active" />}
             {currentBatsmen[1] || 'Batsman 2'}
             {batsmanStats[currentBatsmen[1]]?.isOut && <span className="out-badge">OUT</span>}
@@ -764,6 +782,30 @@ export default function Scorecard({ teams, players, matchIndex, matches, ballsPe
               })}
             </div>
             <button className="btn-secondary" style={{ marginTop: '12px', width: '100%' }} onClick={() => setShowNextBatsman(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Replace Batsman Modal */}
+      {showReplaceBatsman && (
+        <div className="modal-overlay" onClick={() => setShowReplaceBatsman(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h3>Replace {currentBatsmen[replaceBatsmanIdx] || 'Batsman'}</h3>
+            <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>Choose replacement</p>
+            <div className="next-batsman-grid">
+              {availableBatsmen.map(p => {
+                const stats = batsmanStats[p];
+                return (
+                  <button key={p} className="next-batsman-option" onClick={() => doReplaceBatsman(p)}>
+                    <span className="next-name">{p}</span>
+                    {stats && (stats.runs > 0 || stats.balls > 0) && (
+                      <span className="next-stats">{stats.runs} ({stats.balls})</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <button className="btn-secondary" style={{ marginTop: '12px', width: '100%' }} onClick={() => setShowReplaceBatsman(false)}>Cancel</button>
           </div>
         </div>
       )}
