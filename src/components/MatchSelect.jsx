@@ -1,6 +1,7 @@
 export default function MatchSelect({ teams, matches, onSelect, onBack, onUpdateFixture, onViewResults }) {
   const anyStarted = matches.some(m => m.innings && m.innings.length > 0);
   const allDone = matches.length > 0 && matches.every(m => m.completed);
+  const anyPlayed = matches.some(m => m.innings && m.innings.length > 0);
 
   return (
     <div className="screen">
@@ -60,11 +61,15 @@ export default function MatchSelect({ teams, matches, onSelect, onBack, onUpdate
         })}
       </div>
 
-      {allDone && (
+      {allDone ? (
         <button className="btn-primary" style={{ marginTop: '20px' }} onClick={onViewResults}>
-          View Tournament Results →
+          🏆 View Tournament Results →
         </button>
-      )}
+      ) : anyPlayed ? (
+        <button className="btn-secondary" style={{ marginTop: '20px', width: '100%' }} onClick={onViewResults}>
+          🏁 Finished Day — View Results So Far
+        </button>
+      ) : null}
     </div>
   );
 }

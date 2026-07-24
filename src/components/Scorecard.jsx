@@ -31,17 +31,17 @@ const RUN_BUTTONS = [0, 1, 2, 3, 4, 6];
 export default function Scorecard({ teams, players, matchIndex, matches, updateMatch, onBack, onDone }) {
   const m = matches[matchIndex];
 
-  const [phase, setPhase] = useState('battingOrder');
+  const [phase, setPhase] = useState('selectOpeners');
   const [currentInnings, setCurrentInnings] = useState(0);
   const [runs, setRuns] = useState(0);
   const [wickets, setWickets] = useState(0);
   const [balls, setBalls] = useState(0);
 
-  const [battingOrder, setBattingOrder] = useState([]);
   const [currentBatsmen, setCurrentBatsmen] = useState([]);
   const [strikerIdx, setStrikerIdx] = useState(0);
   const [batsmanStats, setBatsmanStats] = useState({});
-  const [nextBatsmanPos, setNextBatsmanPos] = useState(2);
+  const [outPlayers, setOutPlayers] = useState([]);
+  const [selectedOpeners, setSelectedOpeners] = useState([]);
 
   const [currentBowler, setCurrentBowler] = useState('');
   const [bowlerStats, setBowlerStats] = useState({});
@@ -51,7 +51,11 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
   const [innings, setInnings] = useState([]);
 
   const [showDismissalModal, setShowDismissalModal] = useState(false);
+  const [showRunOutPicker, setShowRunOutPicker] = useState(false);
+  const [showNextBatsman, setShowNextBatsman] = useState(false);
   const [showBowlerSelect, setShowBowlerSelect] = useState(false);
+  const [pendingWicketIdx, setPendingWicketIdx] = useState(null);
+  const [pendingDismissalType, setPendingDismissalType] = useState(null);
 
   const [timer, setTimer] = useState(7200);
   const [running, setRunning] = useState(false);
@@ -63,34 +67,31 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
   const battingTeamPlayers = players[battingTeam] || [];
   const bowlingTeamPlayers = players[bowlingTeam] || [];
 
+  const target = currentInnings === 1 && innings.length > 0 ? innings[0].runs + 1 : null;
+  const targetAchieved = target !== null && runs >= target;
+  const ballsRemaining = Math.max(0, MAX_BALLS - balls);
+  const runsNeeded = target !== null ? Math.max(0, target - runs) : 0;
+
+  const availableBatsmen = battingTeamPlayers.filter(
+    p => !currentBatsmen.includes(p) && !outPlayers.includes(p) && !(batsmanStats[p] && batsmanStats[p].isOut)
+  );
+
   useEffect(() => {
     if (running) {
       timerRef.current = setInterval(() => {
-        setTimer(prev => {
-          if (prev <= 1) { clearInterval(timerRef.current); return 0; }
-          return prev - 1;
-        });
+        setTimer(prev => { if (prev <= 1) { clearInterval(timerRef.current); return 0; } return prev - 1; });
       }, 1000);
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [running]);
 
-  useEffect(() => {
-    if (!running) setRunning(true);
-  }, []);
+  useEffect(() => { if (!running) setRunning(true); }, []);
+  useEffect(() => { if (historyRef.current) historyRef.current.scrollLeft = historyRef.current.scrollWidth; }, [ballHistory]);
 
   useEffect(() => {
-    if (historyRef.current) {
-      historyRef.current.scrollLeft = historyRef.current.scrollWidth;
-    }
-  }, [ballHistory]);
-
-  useEffect(() => {
-    if (phase === 'battingOrder' && battingOrder.length === 0 && battingTeamPlayers.length > 0) {
-      setBattingOrder([...battingTeamPlayers]);
-      if (bowlingTeamPlayers.length > 0) {
-        setCurrentBowler(bowlingTeamPlayers[0]);
-      }
+    if (phase === 'selectOpeners') {
+      setSelectedOpeners([]);
+      if (bowlingTeamPlayers.length > 0) setCurrentBowler(bowlingTeamPlayers[0]);
     }
   }, [phase, currentInnings]);
 
@@ -98,23 +99,13 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
   const overStr = `${Math.floor(balls / 6)}.${balls % 6}`;
   const totalExtras = extras.wide + extras.noball + extras.bye + extras.legbye;
 
-  const moveInOrder = (idx, dir) => {
-    const newOrder = [...battingOrder];
-    const swapIdx = idx + dir;
-    if (swapIdx < 0 || swapIdx >= newOrder.length) return;
-    [newOrder[idx], newOrder[swapIdx]] = [newOrder[swapIdx], newOrder[idx]];
-    setBattingOrder(newOrder);
-  };
-
   const startInnings = () => {
-    if (battingOrder.length < 2 || !currentBowler) return;
-    setCurrentBatsmen([battingOrder[0], battingOrder[1]]);
+    if (selectedOpeners.length < 2 || !currentBowler) return;
+    setCurrentBatsmen([selectedOpeners[0], selectedOpeners[1]]);
     setStrikerIdx(0);
-    setNextBatsmanPos(2);
+    setOutPlayers([]);
     const stats = {};
-    battingOrder.forEach(p => {
-      stats[p] = { runs: 0, balls: 0, fours: 0, sixes: 0, isOut: false, dismissal: null, dismissedBy: null };
-    });
+    battingTeamPlayers.forEach(p => { stats[p] = { runs: 0, balls: 0, fours: 0, sixes: 0, isOut: false, dismissal: null, dismissedBy: null }; });
     setBatsmanStats(stats);
     const bowlerSt = {};
     bowlingTeamPlayers.forEach(p => { bowlerSt[p] = { runs: 0, wickets: 0, balls: 0, fours: 0, sixes: 0 }; });
@@ -126,35 +117,12 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
     setPhase('scoring');
   };
 
-  const getBallLabel = (type, val) => {
-    if (type === 'run') return val === 4 ? '4' : val === 6 ? '6' : String(val);
-    if (type === 'wicket') return 'W';
-    const map = { wide: 'WD', noball: 'NB', bye: 'B', legbye: 'LB' };
-    return map[val] || val;
-  };
-
-  const getBallClass = (type, val) => {
-    if (type === 'run') {
-      if (val === 4) return 'four';
-      if (val === 6) return 'six';
-      return 'run';
-    }
-    if (type === 'wicket') return 'wicket';
-    return 'extra';
-  };
-
   const addBowl = useCallback((type, value) => {
-    if (isInningsOver || phase !== 'scoring') return;
+    if (isInningsOver || targetAchieved || phase !== 'scoring') return;
+    if (type === 'wicket') { setShowDismissalModal(true); return; }
 
-    if (type === 'wicket') {
-      setShowDismissalModal(true);
-      return;
-    }
-
-    const isLegal = type === 'run' && value > 0;
     const isWideOrNoball = (type === 'extra' && (value === 'wide' || value === 'noball'));
     const runsScored = type === 'run' ? value : (type === 'extra' ? 1 : 0);
-
     const thisBatsman = currentBatsmen[strikerIdx];
     const isFour = type === 'run' && value === 4;
     const isSix = type === 'run' && value === 6;
@@ -165,13 +133,15 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
     if (type === 'run') {
       setBatsmanStats(prev => {
         const next = { ...prev };
-        next[thisBatsman] = {
-          ...next[thisBatsman],
-          runs: next[thisBatsman].runs + value,
-          balls: next[thisBatsman].balls + 1,
-          fours: next[thisBatsman].fours + (isFour ? 1 : 0),
-          sixes: next[thisBatsman].sixes + (isSix ? 1 : 0),
-        };
+        if (next[thisBatsman]) {
+          next[thisBatsman] = {
+            ...next[thisBatsman],
+            runs: next[thisBatsman].runs + value,
+            balls: next[thisBatsman].balls + 1,
+            fours: next[thisBatsman].fours + (isFour ? 1 : 0),
+            sixes: next[thisBatsman].sixes + (isSix ? 1 : 0),
+          };
+        }
         return next;
       });
       if (value === 1 || value === 3) setStrikerIdx(prev => prev === 0 ? 1 : 0);
@@ -193,52 +163,79 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
       });
     }
 
-    const label = getBallLabel(type, value);
-    const cls = getBallClass(type, value);
-    setBallHistory(prev => [...prev, { label, cls, bowler: currentBowler, batsman: thisBatsman }]);
-  }, [isInningsOver, phase, strikerIdx, currentBatsmen, currentBowler, bowlerStats]);
+    setBallHistory(prev => [...prev, {
+      label: type === 'run' ? (value === 4 ? '4' : value === 6 ? '6' : String(value)) : (type === 'extra' ? ({ wide: 'WD', noball: 'NB', bye: 'B', legbye: 'LB' }[value] || value) : ''),
+      cls: type === 'run' ? (value === 4 ? 'four' : value === 6 ? 'six' : 'run') : 'extra',
+      bowler: currentBowler, batsman: thisBatsman,
+    }]);
+  }, [isInningsOver, targetAchieved, phase, strikerIdx, currentBatsmen, currentBowler, bowlerStats]);
 
-  const handleDismissal = (dismissalType) => {
-    const outBatsman = currentBatsmen[strikerIdx];
+  const selectDismissalType = (type) => {
+    setShowDismissalModal(false);
+    if (type === 'runOut') {
+      setPendingDismissalType('runOut');
+      setShowRunOutPicker(true);
+    } else {
+      setPendingDismissalType(type);
+      setPendingWicketIdx(strikerIdx);
+      processWicket(strikerIdx, type);
+    }
+  };
+
+  const selectRunOutTarget = (idx) => {
+    setShowRunOutPicker(false);
+    setPendingWicketIdx(idx);
+    processWicket(idx, 'runOut');
+  };
+
+  const processWicket = (outIdx, type) => {
+    setPendingDismissalType(type);
+    setPendingWicketIdx(outIdx);
+
+    if (availableBatsmen.length > 0) {
+      setShowNextBatsman(true);
+    } else {
+      finalizeWicket(outIdx, type, null);
+    }
+  };
+
+  const selectNextBatsman = (name) => {
+    setShowNextBatsman(false);
+    finalizeWicket(pendingWicketIdx, pendingDismissalType, name);
+  };
+
+  const finalizeWicket = (outIdx, type, nextName) => {
+    const outBatsman = currentBatsmen[outIdx];
 
     setBatsmanStats(prev => {
       const next = { ...prev };
-      next[outBatsman] = {
-        ...next[outBatsman],
-        balls: next[outBatsman].balls + 1,
-        isOut: true,
-        dismissal: dismissalType,
-        dismissedBy: currentBowler,
-      };
+      if (next[outBatsman]) {
+        next[outBatsman] = { ...next[outBatsman], balls: next[outBatsman].balls + 1, isOut: true, dismissal: type, dismissedBy: currentBowler };
+      }
       return next;
     });
-
+    setOutPlayers(prev => [...prev, outBatsman]);
     setWickets(prev => prev + 1);
     setBalls(prev => prev + 1);
 
     if (currentBowler && bowlerStats[currentBowler]) {
       setBowlerStats(prev => {
         const next = { ...prev };
-        next[currentBowler] = {
-          ...next[currentBowler],
-          wickets: next[currentBowler].wickets + 1,
-          balls: next[currentBowler].balls + 1,
-        };
+        next[currentBowler] = { ...next[currentBowler], wickets: next[currentBowler].wickets + 1, balls: next[currentBowler].balls + 1 };
         return next;
       });
     }
 
-    const label = 'W';
-    const cls = 'wicket';
-    setBallHistory(prev => [...prev, { label, cls, bowler: currentBowler, batsman: outBatsman, dismissal: dismissalType }]);
-    setShowDismissalModal(false);
+    setBallHistory(prev => [...prev, { label: 'W', cls: 'wicket', bowler: currentBowler, batsman: outBatsman, dismissal: type }]);
 
-    if (nextBatsmanPos < battingOrder.length) {
+    if (nextName) {
       const newBatsmen = [...currentBatsmen];
-      newBatsmen[strikerIdx] = battingOrder[nextBatsmanPos];
+      newBatsmen[outIdx] = nextName;
       setCurrentBatsmen(newBatsmen);
-      setNextBatsmanPos(prev => prev + 1);
     }
+
+    setPendingWicketIdx(null);
+    setPendingDismissalType(null);
   };
 
   const changeBowler = (name) => {
@@ -251,11 +248,7 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
 
   const endInnings = useCallback(() => {
     const innData = {
-      battingTeam,
-      battingOrder: [...battingOrder],
-      runs,
-      wickets,
-      balls,
+      battingTeam, battingOrder: currentBatsmen, runs, wickets, balls,
       batsmanStats: JSON.parse(JSON.stringify(batsmanStats)),
       bowlerStats: JSON.parse(JSON.stringify(bowlerStats)),
       extras: { ...extras },
@@ -266,48 +259,29 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
     setInnings(newInnings);
     updateMatch(matchIndex, { innings: newInnings });
     setPhase('inningsReview');
-  }, [battingTeam, battingOrder, runs, wickets, balls, batsmanStats, bowlerStats, extras, ballHistory, currentBowler, innings, updateMatch, matchIndex]);
+  }, [battingTeam, currentBatsmen, runs, wickets, balls, batsmanStats, bowlerStats, extras, ballHistory, currentBowler, innings, updateMatch, matchIndex]);
 
   const nextInnings = useCallback(() => {
-    const next = currentInnings + 1;
-    if (next >= 2) {
-      completeMatch();
-      return;
-    }
-    setCurrentInnings(next);
-    setBattingOrder([]);
+    setCurrentInnings(prev => prev + 1);
     setCurrentBatsmen([]);
     setBatsmanStats({});
     setBowlerStats({});
-    setNextBatsmanPos(2);
-    setPhase('battingOrder');
-  }, [currentInnings]);
+    setOutPlayers([]);
+    setPhase('selectOpeners');
+  }, []);
 
   const completeMatch = useCallback(() => {
     const finalInnings = balls > 0 && phase === 'scoring'
-      ? [...innings, {
-          battingTeam, battingOrder: [...battingOrder], runs, wickets, balls,
-          batsmanStats: JSON.parse(JSON.stringify(batsmanStats)),
-          bowlerStats: JSON.parse(JSON.stringify(bowlerStats)),
-          extras: { ...extras },
-          ballHistory: ballHistory.map(b => ({ ...b })),
-          currentBowler,
-        }]
+      ? [...innings, { battingTeam, battingOrder: currentBatsmen, runs, wickets, balls, batsmanStats: JSON.parse(JSON.stringify(batsmanStats)), bowlerStats: JSON.parse(JSON.stringify(bowlerStats)), extras: { ...extras }, ballHistory: ballHistory.map(b => ({ ...b })), currentBowler }]
       : innings;
-
     setInnings(finalInnings);
-
     if (finalInnings.length >= 2) {
       const inn1 = finalInnings[0];
       const inn2 = finalInnings[1];
       let result = '';
-      if (inn1.runs > inn2.runs) {
-        result = `${teams[m.t1]} won by ${inn1.runs - inn2.runs} runs`;
-      } else if (inn2.runs > inn1.runs) {
-        result = `${teams[m.t2]} won by ${10 - inn2.wickets} wicket${10 - inn2.wickets !== 1 ? 's' : ''}`;
-      } else {
-        result = 'Match Tied!';
-      }
+      if (inn1.runs > inn2.runs) result = `${teams[m.t1]} won by ${inn1.runs - inn2.runs} runs`;
+      else if (inn2.runs > inn1.runs) result = `${teams[m.t2]} won by ${10 - inn2.wickets} wicket${10 - inn2.wickets !== 1 ? 's' : ''}`;
+      else result = 'Match Tied!';
       updateMatch(matchIndex, { innings: finalInnings, completed: true, result });
     } else {
       updateMatch(matchIndex, { innings: finalInnings, completed: true });
@@ -315,7 +289,7 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
     if (timerRef.current) clearInterval(timerRef.current);
     setRunning(false);
     onDone();
-  }, [innings, battingTeam, battingOrder, runs, wickets, balls, batsmanStats, bowlerStats, extras, ballHistory, currentBowler, phase, teams, m.t1, m.t2, updateMatch, matchIndex, onDone]);
+  }, [innings, battingTeam, currentBatsmen, runs, wickets, balls, batsmanStats, bowlerStats, extras, ballHistory, currentBowler, phase, teams, m.t1, m.t2, updateMatch, matchIndex, onDone]);
 
   const resetMatch = useCallback(() => {
     if (!window.confirm('Reset this match?')) return;
@@ -325,73 +299,67 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
     setInnings([]);
     setCurrentInnings(0);
     setRuns(0); setWickets(0); setBalls(0);
-    setBattingOrder([]);
     setCurrentBatsmen([]);
     setBatsmanStats({});
     setBowlerStats({});
-    setNextBatsmanPos(2);
+    setOutPlayers([]);
     setStrikerIdx(0);
     setBallHistory([]);
     setExtras({ wide: 0, noball: 0, bye: 0, legbye: 0 });
     setCurrentBowler('');
-    setPhase('battingOrder');
+    setPhase('selectOpeners');
     updateMatch(matchIndex, { innings: [], completed: false, result: '' });
     setRunning(true);
   }, [matchIndex, updateMatch]);
 
-  // ========== Batting Order Phase ==========
-  if (phase === 'battingOrder') {
+  // === Select Openers Phase ===
+  if (phase === 'selectOpeners') {
     return (
       <div className="screen">
         <div className="screen-header">
           <button className="btn-back" onClick={onBack}>←</button>
-          <h2>{teams[battingTeam]} Batting Order</h2>
+          <h2>Select Openers</h2>
         </div>
-
-        <div className="batting-order-section">
-          <p style={{ textAlign: 'center', color: 'var(--muted)', fontSize: '13px', marginBottom: '16px' }}>
-            Arrange batting order • Select opening bowler
-          </p>
-          <div className="batting-order-list">
-            {battingOrder.map((name, idx) => (
-              <div className="batting-order-row" key={idx}>
-                <span className="order-num">{idx + 1}</span>
-                <span className="order-name">{name}</span>
-                <div className="order-moves">
-                  <button className="btn-move" disabled={idx === 0} onClick={() => moveInOrder(idx, -1)}>↑</button>
-                  <button className="btn-move" disabled={idx === battingOrder.length - 1} onClick={() => moveInOrder(idx, 1)}>↓</button>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="bowler-select-section">
-            <label className="bowler-select-label">Opening Bowler</label>
-            <select
-              className="bowler-select"
-              value={currentBowler}
-              onChange={(e) => setCurrentBowler(e.target.value)}
+        <p style={{ textAlign: 'center', color: 'var(--muted)', fontSize: '13px', marginBottom: '16px' }}>
+          {teams[battingTeam]} — Pick 2 openers &amp; bowler
+        </p>
+        <div className="opener-grid">
+          {battingTeamPlayers.map(p => (
+            <button
+              key={p}
+              className={`opener-chip ${selectedOpeners.includes(p) ? 'selected' : ''}`}
+              onClick={() => {
+                if (selectedOpeners.includes(p)) {
+                  setSelectedOpeners(prev => prev.filter(x => x !== p));
+                } else if (selectedOpeners.length < 2) {
+                  setSelectedOpeners(prev => [...prev, p]);
+                }
+              }}
             >
-              <option value="">Select bowler...</option>
-              {bowlingTeamPlayers.map(p => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
-          </div>
-
-          <button className="btn-primary" disabled={battingOrder.length < 2 || !currentBowler} onClick={startInnings}>
-            Start Innings →
-          </button>
+              {p}
+              {selectedOpeners.includes(p) && <span className="opener-badge">{selectedOpeners.indexOf(p) === 0 ? 'Opener 1' : 'Opener 2'}</span>}
+            </button>
+          ))}
         </div>
+        <div className="bowler-select-section">
+          <label className="bowler-select-label">Opening Bowler</label>
+          <select className="bowler-select" value={currentBowler} onChange={e => setCurrentBowler(e.target.value)}>
+            <option value="">Select...</option>
+            {bowlingTeamPlayers.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+        <button className="btn-primary" disabled={selectedOpeners.length < 2 || !currentBowler} onClick={startInnings}>
+          Start Innings →
+        </button>
       </div>
     );
   }
 
-  // ========== Innings Review Phase ==========
+  // === Innings Review Phase ===
   if (phase === 'inningsReview') {
     const inn = innings[innings.length - 1];
-    const batStats = Object.entries(inn.batsmanStats);
-    const bowlStats = Object.entries(inn.bowlerStats).filter(([_, v]) => v.balls > 0);
+    const batStats = Object.entries(inn.batsmanStats || {});
+    const bowlStats = Object.entries(inn.bowlerStats || {}).filter(([_, v]) => v.balls > 0);
     const innOvers = `${Math.floor(inn.balls / 6)}.${inn.balls % 6}`;
 
     return (
@@ -400,7 +368,6 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
           <button className="btn-back" onClick={onBack}>←</button>
           <h2>Innings Over</h2>
         </div>
-
         <div className="innings-review-card">
           <div className="review-header">
             <span className="review-team">{teams[inn.battingTeam]}</span>
@@ -408,12 +375,9 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
             <span className="review-overs">({innOvers} ov)</span>
           </div>
           <div className="review-extras">Extras: {inn.extras.wide + inn.extras.noball + inn.extras.bye + inn.extras.legbye}
-            {Object.entries(inn.extras).filter(([_, v]) => v > 0).map(([k, v]) => (
-              <span key={k}> • {k}: {v}</span>
-            ))}
+            {Object.entries(inn.extras).filter(([_, v]) => v > 0).map(([k, v]) => (<span key={k}> • {k}: {v}</span>))}
           </div>
         </div>
-
         <h4 className="sheet-heading">Batting</h4>
         <div className="score-sheet">
           <div className="sheet-row sheet-header">
@@ -426,7 +390,7 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
           </div>
           {batStats.map(([name, s]) => {
             const sr = s.balls > 0 ? ((s.runs / s.balls) * 100).toFixed(0) : '-';
-            const outStr = s.isOut ? (s.dismissal === 'runOut' ? 'run out' : `b ${s.dismissedBy}`) : 'not out';
+            const outStr = s.isOut ? (s.dismissal === 'runOut' ? 'run out' : `b ${s.dismissedBy || ''}`) : 'not out';
             return (
               <div className="sheet-row" key={name}>
                 <span className="sheet-name">{name}</span>
@@ -440,7 +404,6 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
             );
           })}
         </div>
-
         {bowlStats.length > 0 && (
           <>
             <h4 className="sheet-heading">Bowling</h4>
@@ -468,23 +431,18 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
             </div>
           </>
         )}
-
-        <div className="match-controls" style={{ marginTop: '20px' }}>
+        <div className="match-controls" style={{ marginTop: '20px', flexDirection: 'column', gap: '10px' }}>
           {currentInnings < 1 ? (
-            <button className="btn-primary" onClick={nextInnings}>
-              Next Innings →
-            </button>
+            <button className="btn-primary" onClick={nextInnings}>Next Innings →</button>
           ) : (
-            <button className="btn-primary" onClick={completeMatch}>
-              Complete Match →
-            </button>
+            <button className="btn-primary" onClick={completeMatch}>Complete Match →</button>
           )}
         </div>
       </div>
     );
   }
 
-  // ========== Scoring Phase ==========
+  // === Scoring Phase ===
   return (
     <div className="screen">
       <div className="screen-header">
@@ -495,10 +453,22 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
 
       <div className="timer-bar">
         <span className="timer-label">Session Timer</span>
-        <span className={`timer-value ${timer < 600 ? 'urgent' : ''}`}>
-          {formatTime(timer)}
-        </span>
+        <span className={`timer-value ${timer < 600 ? 'urgent' : ''}`}>{formatTime(timer)}</span>
       </div>
+
+      {/* Target bar for 2nd innings */}
+      {target !== null && (
+        <div className={`target-bar ${targetAchieved ? 'achieved' : ''}`}>
+          {targetAchieved ? (
+            <span>🎉 Target Achieved! Match Won</span>
+          ) : (
+            <>
+              <span>Target: <strong>{target}</strong></span>
+              <span>Need <strong>{runsNeeded}</strong> runs from <strong>{ballsRemaining}</strong> balls</span>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="innings-section">
         <div className="innings-header">
@@ -515,11 +485,8 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
         </div>
 
         {totalExtras > 0 && (
-          <div className="extras-row">
-            Extras: {totalExtras}
-            {Object.entries(extras).filter(([_, v]) => v > 0).map(([k, v]) => (
-              <span key={k}> • {k}: {v}</span>
-            ))}
+          <div className="extras-row">Extras: {totalExtras}
+            {Object.entries(extras).filter(([_, v]) => v > 0).map(([k, v]) => (<span key={k}> • {k}: {v}</span>))}
           </div>
         )}
 
@@ -540,12 +507,15 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
           <span className="score">{batsmanStats[currentBatsmen[1]]?.runs || 0} ({batsmanStats[currentBatsmen[1]]?.balls || 0})</span>
         </div>
 
+        {availableBatsmen.length > 0 && (
+          <div className="remaining-count">{availableBatsmen.length} player{availableBatsmen.length !== 1 ? 's' : ''} yet to bat</div>
+        )}
+
         <div className="bowler-display" onClick={() => setShowBowlerSelect(true)}>
           <span className="bowler-label">Bowler</span>
           <span className="bowler-name">{currentBowler || 'Select'}</span>
           <span className="bowler-change">✎</span>
         </div>
-
         {currentBowler && bowlerStats[currentBowler] && (
           <div className="bowler-figures">
             {Math.floor(bowlerStats[currentBowler].balls / 6)}.{bowlerStats[currentBowler].balls % 6} ov • {bowlerStats[currentBowler].runs} r • {bowlerStats[currentBowler].wickets} w
@@ -554,21 +524,15 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
 
         <div className="scoring-buttons">
           {RUN_BUTTONS.map(r => (
-            <button
-              key={r}
-              className={`score-btn ${r === 4 ? 'four' : r === 6 ? 'six' : ''}`}
-              onClick={() => addBowl('run', r)}
-              disabled={isInningsOver}
-            >
+            <button key={r} className={`score-btn ${r === 4 ? 'four' : r === 6 ? 'six' : ''}`}
+              onClick={() => addBowl('run', r)} disabled={isInningsOver || targetAchieved}>
               {r === 0 ? '•' : r}
             </button>
           ))}
-          <button className="score-btn wicket" onClick={() => addBowl('wicket', 0)} disabled={isInningsOver}>W</button>
-          <button className="score-btn wicket runout" onClick={() => handleDismissal('runOut')} disabled={isInningsOver}>RO</button>
+          <button className="score-btn wicket" onClick={() => addBowl('wicket', 0)} disabled={isInningsOver || targetAchieved}>W</button>
+          <button className="score-btn wicket runout" onClick={() => selectDismissalType('runOut')} disabled={isInningsOver || targetAchieved}>RO</button>
           {EXTRA_TYPES.map(e => (
-            <button key={e.key} className="score-btn extra" onClick={() => addBowl('extra', e.key)} disabled={isInningsOver}>
-              {e.label}
-            </button>
+            <button key={e.key} className="score-btn extra" onClick={() => addBowl('extra', e.key)} disabled={isInningsOver || targetAchieved}>{e.label}</button>
           ))}
         </div>
       </div>
@@ -591,36 +555,69 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
       )}
 
       <div className="match-controls" style={{ flexDirection: 'column', gap: '10px' }}>
-        {isInningsOver && (
+        {(isInningsOver || targetAchieved) && (
           <button className="btn-primary pulse-btn" onClick={endInnings}>
-            Innings Over → View Scorecard
+            {targetAchieved ? '🏆 Match Won — End Innings' : 'Innings Over → View Scorecard'}
           </button>
         )}
-        {!isInningsOver && (
-          <button className="btn-secondary" onClick={endInnings}>
-            End Innings
-          </button>
+        {!isInningsOver && !targetAchieved && (
+          <button className="btn-secondary" onClick={endInnings}>End Innings</button>
         )}
-        <button className="btn-secondary danger" onClick={completeMatch}>
-          End Match
-        </button>
+        <button className="btn-secondary danger" onClick={completeMatch}>End Match</button>
       </div>
 
-      {/* Dismissal Modal */}
+      {/* Dismissal Type Modal */}
       {showDismissalModal && (
         <div className="modal-overlay" onClick={() => setShowDismissalModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <h3>Dismissal Type</h3>
             <div className="dismissal-grid">
               {DISMISSAL_TYPES.map(dt => (
-                <button key={dt.key} className="dismissal-btn" onClick={() => handleDismissal(dt.key)}>
-                  {dt.label}
-                </button>
+                <button key={dt.key} className="dismissal-btn" onClick={() => selectDismissalType(dt.key)}>{dt.label}</button>
               ))}
             </div>
-            <button className="btn-secondary" style={{ marginTop: '12px', width: '100%' }} onClick={() => setShowDismissalModal(false)}>
-              Cancel
-            </button>
+            <button className="btn-secondary" style={{ marginTop: '12px', width: '100%' }} onClick={() => setShowDismissalModal(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Run Out Picker Modal */}
+      {showRunOutPicker && (
+        <div className="modal-overlay" onClick={() => setShowRunOutPicker(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h3>Who is Run Out?</h3>
+            <div className="dismissal-grid">
+              <button className="dismissal-btn runout-opt" onClick={() => selectRunOutTarget(0)}>
+                {currentBatsmen[0] || 'Striker'} <span className="strike-label">(Striker)</span>
+              </button>
+              <button className="dismissal-btn runout-opt" onClick={() => selectRunOutTarget(1)}>
+                {currentBatsmen[1] || 'Non-Striker'} <span className="strike-label">(Non-Striker)</span>
+              </button>
+            </div>
+            <button className="btn-secondary" style={{ marginTop: '12px', width: '100%' }} onClick={() => setShowRunOutPicker(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Next Batsman Modal */}
+      {showNextBatsman && (
+        <div className="modal-overlay" onClick={() => setShowNextBatsman(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h3>Choose Next Batsman</h3>
+            <div className="next-batsman-grid">
+              {availableBatsmen.map(p => {
+                const stats = batsmanStats[p];
+                return (
+                  <button key={p} className="next-batsman-option" onClick={() => selectNextBatsman(p)}>
+                    <span className="next-name">{p}</span>
+                    {stats && (stats.runs > 0 || stats.balls > 0) && (
+                      <span className="next-stats">{stats.runs} ({stats.balls})</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <button className="btn-secondary" style={{ marginTop: '12px', width: '100%' }} onClick={() => setShowNextBatsman(false)}>Cancel</button>
           </div>
         </div>
       )}
@@ -635,20 +632,14 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
                 const s = bowlerStats[p];
                 const fig = s ? `${Math.floor(s.balls / 6)}.${s.balls % 6} ov • ${s.runs}/${s.wickets}` : '';
                 return (
-                  <button
-                    key={p}
-                    className={`bowler-option ${currentBowler === p ? 'active' : ''}`}
-                    onClick={() => changeBowler(p)}
-                  >
+                  <button key={p} className={`bowler-option ${currentBowler === p ? 'active' : ''}`} onClick={() => changeBowler(p)}>
                     <span className="bowler-opt-name">{p}</span>
                     {fig && <span className="bowler-opt-fig">{fig}</span>}
                   </button>
                 );
               })}
             </div>
-            <button className="btn-secondary" style={{ marginTop: '12px', width: '100%' }} onClick={() => setShowBowlerSelect(false)}>
-              Cancel
-            </button>
+            <button className="btn-secondary" style={{ marginTop: '12px', width: '100%' }} onClick={() => setShowBowlerSelect(false)}>Cancel</button>
           </div>
         </div>
       )}
