@@ -19,13 +19,6 @@ const EXTRA_TYPES = [
 const MAX_BALLS = 24;
 const MAX_WICKETS = 10;
 
-function formatTime(sec) {
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const s = sec % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
-
 const RUN_BUTTONS = [0, 1, 2, 3, 4, 6];
 
 export default function Scorecard({ teams, players, matchIndex, matches, updateMatch, onBack, onDone }) {
@@ -57,9 +50,6 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
   const [pendingWicketIdx, setPendingWicketIdx] = useState(null);
   const [pendingDismissalType, setPendingDismissalType] = useState(null);
 
-  const [timer, setTimer] = useState(7200);
-  const [running, setRunning] = useState(false);
-  const timerRef = useRef(null);
   const historyRef = useRef(null);
 
   const battingTeam = currentInnings === 0 ? m.t1 : currentInnings === 1 ? m.t2 : m.t1;
@@ -76,16 +66,6 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
     p => !currentBatsmen.includes(p) && !outPlayers.includes(p) && !(batsmanStats[p] && batsmanStats[p].isOut)
   );
 
-  useEffect(() => {
-    if (running) {
-      timerRef.current = setInterval(() => {
-        setTimer(prev => { if (prev <= 1) { clearInterval(timerRef.current); return 0; } return prev - 1; });
-      }, 1000);
-    }
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [running]);
-
-  useEffect(() => { if (!running) setRunning(true); }, []);
   useEffect(() => { if (historyRef.current) historyRef.current.scrollLeft = historyRef.current.scrollWidth; }, [ballHistory]);
 
   useEffect(() => {
@@ -286,16 +266,11 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
     } else {
       updateMatch(matchIndex, { innings: finalInnings, completed: true });
     }
-    if (timerRef.current) clearInterval(timerRef.current);
-    setRunning(false);
     onDone();
   }, [innings, battingTeam, currentBatsmen, runs, wickets, balls, batsmanStats, bowlerStats, extras, ballHistory, currentBowler, phase, teams, m.t1, m.t2, updateMatch, matchIndex, onDone]);
 
   const resetMatch = useCallback(() => {
     if (!window.confirm('Reset this match?')) return;
-    if (timerRef.current) clearInterval(timerRef.current);
-    setRunning(false);
-    setTimer(7200);
     setInnings([]);
     setCurrentInnings(0);
     setRuns(0); setWickets(0); setBalls(0);
@@ -309,7 +284,6 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
     setCurrentBowler('');
     setPhase('selectOpeners');
     updateMatch(matchIndex, { innings: [], completed: false, result: '' });
-    setRunning(true);
   }, [matchIndex, updateMatch]);
 
   // === Select Openers Phase ===
@@ -449,11 +423,6 @@ export default function Scorecard({ teams, players, matchIndex, matches, updateM
         <button className="btn-back" onClick={onBack}>←</button>
         <h2>{teams[m.t1]} vs {teams[m.t2]}</h2>
         <button className="btn-sm" onClick={resetMatch} title="Reset">↻</button>
-      </div>
-
-      <div className="timer-bar">
-        <span className="timer-label">Session Timer</span>
-        <span className={`timer-value ${timer < 600 ? 'urgent' : ''}`}>{formatTime(timer)}</span>
       </div>
 
       {/* Target bar for 2nd innings */}

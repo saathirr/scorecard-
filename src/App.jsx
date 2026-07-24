@@ -13,6 +13,7 @@ export default function App() {
   const [players, setPlayers] = useState({ 0: [], 1: [], 2: [] });
   const [matches, setMatches] = useState([]);
   const [currentMatch, setCurrentMatch] = useState(null);
+  const [dayFinished, setDayFinished] = useState(false);
 
   const go = useCallback((s) => setScreen(s), []);
 
@@ -54,11 +55,18 @@ export default function App() {
     });
   }, []);
 
+  const finishDay = useCallback(() => {
+    setMatches(prev => prev.map(m => m.completed ? m : { ...m, completed: true }));
+    setDayFinished(true);
+    go(SCREENS.SUMMARY);
+  }, [go]);
+
   const resetAll = useCallback(() => {
     setTeams(['', '', '']);
     setPlayers({ 0: [], 1: [], 2: [] });
     setMatches([]);
     setCurrentMatch(null);
+    setDayFinished(false);
     go(SCREENS.HOME);
   }, [go]);
 
@@ -69,7 +77,7 @@ export default function App() {
         <PlayerSetup teams={teams} players={players} onStart={handlePlayersSubmit} onBack={() => go(SCREENS.HOME)} />
       )}
       {screen === SCREENS.MATCH_SELECT && (
-        <MatchSelect teams={teams} matches={matches} onSelect={openMatch} onBack={resetAll} onUpdateFixture={updateFixture} onViewResults={() => go(SCREENS.SUMMARY)} />
+        <MatchSelect teams={teams} matches={matches} onSelect={openMatch} onBack={resetAll} onUpdateFixture={updateFixture} onViewResults={finishDay} />
       )}
       {screen === SCREENS.SCORECARD && (
         <Scorecard

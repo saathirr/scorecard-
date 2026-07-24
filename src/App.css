@@ -808,6 +808,10 @@ html, body {
 .runout-opt { flex-direction: column; gap: 4px; padding: 16px 10px; }
 .strike-label { font-size: 11px; color: var(--muted); font-weight: 400; }
 
+/* Summary actions */
+.summary-actions { display: flex; flex-direction: column; gap: 10px; margin: 20px 0; }
+.summary-actions .btn-primary { background: linear-gradient(135deg, #2196F3, #1565C0); box-shadow: 0 6px 24px rgba(33,150,243,0.35); }
+
 /* Remaining players count */
 .remaining-count {
   font-size: 11px;
