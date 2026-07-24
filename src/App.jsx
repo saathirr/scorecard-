@@ -46,6 +46,14 @@ export default function App() {
     });
   }, []);
 
+  const updateFixture = useCallback((idx, t1, t2) => {
+    setMatches(prev => {
+      const m = [...prev];
+      m[idx] = { ...m[idx], t1, t2, innings: [], completed: false, result: '' };
+      return m;
+    });
+  }, []);
+
   const resetAll = useCallback(() => {
     setTeams(['', '', '']);
     setPlayers({ 0: [], 1: [], 2: [] });
@@ -54,8 +62,6 @@ export default function App() {
     go(SCREENS.HOME);
   }, [go]);
 
-  const allDone = matches.length > 0 && matches.every(m => m.completed);
-
   return (
     <div className="app-container">
       {screen === SCREENS.HOME && <HomeScreen onStart={handleTeamsSubmit} />}
@@ -63,20 +69,18 @@ export default function App() {
         <PlayerSetup teams={teams} players={players} onStart={handlePlayersSubmit} onBack={() => go(SCREENS.HOME)} />
       )}
       {screen === SCREENS.MATCH_SELECT && (
-        <MatchSelect teams={teams} matches={matches} onSelect={openMatch} onBack={resetAll} />
+        <MatchSelect teams={teams} matches={matches} onSelect={openMatch} onBack={resetAll} onUpdateFixture={updateFixture} onViewResults={() => go(SCREENS.SUMMARY)} />
       )}
       {screen === SCREENS.SCORECARD && (
         <Scorecard
+          key={currentMatch}
           teams={teams}
           players={players}
           matchIndex={currentMatch}
           matches={matches}
           updateMatch={updateMatch}
           onBack={() => go(SCREENS.MATCH_SELECT)}
-          onDone={() => {
-            if (allDone) go(SCREENS.SUMMARY);
-            else go(SCREENS.MATCH_SELECT);
-          }}
+          onDone={() => go(SCREENS.MATCH_SELECT)}
         />
       )}
       {screen === SCREENS.SUMMARY && <SummaryScreen teams={teams} matches={matches} onNew={resetAll} />}
