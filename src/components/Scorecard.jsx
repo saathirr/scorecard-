@@ -30,11 +30,12 @@ function snapshot(runs, wickets, balls, batsmanStats, bowlerStats, extras, ballH
   };
 }
 
-export default function Scorecard({ teams, players, matchIndex, matches, ballsPerOver, updateMatch, onBack, onDone }) {
+export default function Scorecard({ teams, matchIndex, matches, ballsPerOver, updateMatch, onBack, onDone }) {
   const m = matches[matchIndex];
   const MAX_BALLS = ballsPerOver * 4;
 
   const [phase, setPhase] = useState(m.battingFirst === null ? 'toss' : 'selectOpeners');
+  const [teamPlayers, setTeamPlayers] = useState({});
   const [currentInnings, setCurrentInnings] = useState(0);
   const [runs, setRuns] = useState(0);
   const [wickets, setWickets] = useState(0);
@@ -44,7 +45,12 @@ export default function Scorecard({ teams, players, matchIndex, matches, ballsPe
   const [strikerIdx, setStrikerIdx] = useState(0);
   const [batsmanStats, setBatsmanStats] = useState({});
   const [outPlayers, setOutPlayers] = useState([]);
-  const [selectedOpeners, setSelectedOpeners] = useState([]);
+  const [selectedOpeners, setSelectedOpeners] = useState(['', '']);
+  const [newPlayerInput, setNewPlayerInput] = useState('');
+  const [newBowlerInput, setNewBowlerInput] = useState('');
+  const [newNextBatsmanInput, setNewNextBatsmanInput] = useState('');
+  const [newReplaceBatsmanInput, setNewReplaceBatsmanInput] = useState('');
+  const [newBowlerModalInput, setNewBowlerModalInput] = useState('');
 
   const [currentBowler, setCurrentBowler] = useState('');
   const [bowlerStats, setBowlerStats] = useState({});
@@ -76,9 +82,18 @@ export default function Scorecard({ teams, players, matchIndex, matches, ballsPe
   const bowlingTeam = battingFirst !== null
     ? (currentInnings % 2 === 0 ? (m.t1 === battingFirst ? m.t2 : m.t1) : battingFirst)
     : (currentInnings === 0 ? m.t2 : currentInnings === 1 ? m.t1 : m.t2);
-  const battingTeamPlayers = players[battingTeam] || [];
-  const bowlingTeamPlayers = players[bowlingTeam] || [];
+  const battingTeamPlayers = teamPlayers[battingTeam] || [];
+  const bowlingTeamPlayers = teamPlayers[bowlingTeam] || [];
 
+  const addPlayerToTeam = useCallback((teamIdx, name) => {
+    const n = name.trim();
+    if (!n) return;
+    setTeamPlayers(prev => {
+      const arr = prev[teamIdx] || [];
+      if (arr.includes(n)) return prev;
+      return { ...prev, [teamIdx]: [...arr, n] };
+    });
+  }, []);
   const target = currentInnings === 1 && innings.length > 0 ? innings[0].runs + 1 : null;
   const targetAchieved = target !== null && runs >= target;
   const ballsRemaining = Math.max(0, MAX_BALLS - balls);
@@ -92,7 +107,9 @@ export default function Scorecard({ teams, players, matchIndex, matches, ballsPe
 
   useEffect(() => {
     if (phase === 'selectOpeners') {
-      setSelectedOpeners([]);
+      setSelectedOpeners(['', '']);
+      setNewPlayerInput('');
+      setNewBowlerInput('');
       if (bowlingTeamPlayers.length > 0) setCurrentBowler(bowlingTeamPlayers[0]);
     }
   }, [phase, currentInnings]);
@@ -156,7 +173,7 @@ export default function Scorecard({ teams, players, matchIndex, matches, ballsPe
   const totalExtras = extras.wide + extras.noball + extras.bye + extras.legbye;
 
   const startInnings = () => {
-    if (selectedOpeners.length < 2 || !currentBowler) return;
+    if (!selectedOpeners[0] || !selectedOpeners[1] || !currentBowler) return;
     setCurrentBatsmen([selectedOpeners[0], selectedOpeners[1]]);
     setStrikerIdx(0);
     setOutPlayers([]);
@@ -458,41 +475,70 @@ export default function Scorecard({ teams, players, matchIndex, matches, ballsPe
 
   // === Select Openers Phase ===
   if (phase === 'selectOpeners') {
+    const [o1, o2] = selectedOpeners;
     return (
       <div className="screen">
         <div className="screen-header">
           <button className="btn-back" onClick={onBack}>←</button>
-          <h2>Select Openers</h2>
+          <h2>Openers & Bowler</h2>
         </div>
         <p style={{ textAlign: 'center', color: 'var(--muted)', fontSize: '13px', marginBottom: '16px' }}>
-          {teams[battingTeam]} — Pick 2 openers &amp; bowler ({ballsPerOver} balls/over)
+          {teams[battingTeam]} batting • {teams[bowlingTeam]} bowling ({ballsPerOver} balls/over)
         </p>
-        <div className="opener-grid">
-          {battingTeamPlayers.map(p => (
-            <button
-              key={p}
-              className={`opener-chip ${selectedOpeners.includes(p) ? 'selected' : ''}`}
-              onClick={() => {
-                if (selectedOpeners.includes(p)) {
-                  setSelectedOpeners(prev => prev.filter(x => x !== p));
-                } else if (selectedOpeners.length < 2) {
-                  setSelectedOpeners(prev => [...prev, p]);
-                }
-              }}
-            >
-              {p}
-              {selectedOpeners.includes(p) && <span className="opener-badge">{selectedOpeners.indexOf(p) === 0 ? 'Opener 1' : 'Opener 2'}</span>}
-            </button>
-          ))}
+
+        <div className="inline-player-section">
+          <label className="inline-label">Opening Batsman 1</label>
+          <div className="inline-player-row">
+            <input className="team-input" placeholder="Name..." value={selectedOpeners[0] || ''}
+              onChange={e => setSelectedOpeners(prev => [e.target.value, prev[1]])} />
+            {battingTeamPlayers.filter(p => p !== selectedOpeners[1]).map(p => (
+              <button key={p} className={`inline-chip ${selectedOpeners[0] === p ? 'active' : ''}`}
+                onClick={() => setSelectedOpeners(prev => [p, prev[1]])}>{p}</button>
+            ))}
+          </div>
         </div>
-        <div className="bowler-select-section">
-          <label className="bowler-select-label">Opening Bowler</label>
-          <select className="bowler-select" value={currentBowler} onChange={e => setCurrentBowler(e.target.value)}>
-            <option value="">Select...</option>
-            {bowlingTeamPlayers.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
+
+        <div className="inline-player-section">
+          <label className="inline-label">Opening Batsman 2</label>
+          <div className="inline-player-row">
+            <input className="team-input" placeholder="Name..." value={selectedOpeners[1] || ''}
+              onChange={e => setSelectedOpeners(prev => [prev[0], e.target.value])} />
+            {battingTeamPlayers.filter(p => p !== selectedOpeners[0]).map(p => (
+              <button key={p} className={`inline-chip ${selectedOpeners[1] === p ? 'active' : ''}`}
+                onClick={() => setSelectedOpeners(prev => [prev[0], p])}>{p}</button>
+            ))}
+          </div>
         </div>
-        <button className="btn-primary" disabled={selectedOpeners.length < 2 || !currentBowler} onClick={startInnings}>
+
+        <div className="inline-player-section">
+          <label className="inline-label">Add player to {teams[battingTeam]}</label>
+          <div className="inline-player-row">
+            <input className="team-input" placeholder="New player name..."
+              value={newPlayerInput} onChange={e => setNewPlayerInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addPlayerToTeam(battingTeam, newPlayerInput); setNewPlayerInput(''); } }} />
+            <button className="btn-sm gold" onClick={() => { addPlayerToTeam(battingTeam, newPlayerInput); setNewPlayerInput(''); }}>+ Add</button>
+          </div>
+        </div>
+
+        <div className="bowler-select-section" style={{ marginTop: '16px' }}>
+          <label className="bowler-select-label">Opening Bowler ({teams[bowlingTeam]})</label>
+          <div className="inline-player-row">
+            <input className="team-input" placeholder="Bowler name..." value={currentBowler}
+              onChange={e => setCurrentBowler(e.target.value)} />
+            {bowlingTeamPlayers.map(p => (
+              <button key={p} className={`inline-chip ${currentBowler === p ? 'active' : ''}`}
+                onClick={() => setCurrentBowler(p)}>{p}</button>
+            ))}
+          </div>
+          <div style={{ marginTop: '8px' }}>
+            <input className="team-input" placeholder="Add bowler..."
+              value={newBowlerInput} onChange={e => setNewBowlerInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addPlayerToTeam(bowlingTeam, newBowlerInput); setNewBowlerInput(''); } }} />
+            <button className="btn-sm gold" style={{ marginTop: '6px' }} onClick={() => { addPlayerToTeam(bowlingTeam, newBowlerInput); setNewBowlerInput(''); }}>+ Add Bowler</button>
+          </div>
+        </div>
+
+        <button className="btn-primary" disabled={!selectedOpeners[0] || !selectedOpeners[1] || !currentBowler} onClick={() => { addPlayerToTeam(battingTeam, selectedOpeners[0]); addPlayerToTeam(battingTeam, selectedOpeners[1]); addPlayerToTeam(bowlingTeam, currentBowler); startInnings(); }}>
           Start Innings →
         </button>
       </div>
@@ -768,6 +814,12 @@ export default function Scorecard({ teams, players, matchIndex, matches, ballsPe
         <div className="modal-overlay" onClick={() => setShowNextBatsman(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <h3>Choose Next Batsman</h3>
+            <div className="inline-player-row" style={{ marginBottom: '10px' }}>
+              <input className="team-input" placeholder="New batsman name..."
+                value={newNextBatsmanInput} onChange={e => setNewNextBatsmanInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const name = newNextBatsmanInput.trim(); if (name) { addPlayerToTeam(battingTeam, name); selectNextBatsman(name); setNewNextBatsmanInput(''); } } }} />
+              <button className="btn-sm gold" onClick={() => { const name = newNextBatsmanInput.trim(); if (name) { addPlayerToTeam(battingTeam, name); selectNextBatsman(name); setNewNextBatsmanInput(''); } }}>Go</button>
+            </div>
             <div className="next-batsman-grid">
               {availableBatsmen.map(p => {
                 const stats = batsmanStats[p];
@@ -791,7 +843,13 @@ export default function Scorecard({ teams, players, matchIndex, matches, ballsPe
         <div className="modal-overlay" onClick={() => setShowReplaceBatsman(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <h3>Replace {currentBatsmen[replaceBatsmanIdx] || 'Batsman'}</h3>
-            <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>Choose replacement</p>
+            <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--muted)', marginBottom: '8px' }}>Choose replacement</p>
+            <div className="inline-player-row" style={{ marginBottom: '10px' }}>
+              <input className="team-input" placeholder="New batsman name..."
+                value={newReplaceBatsmanInput} onChange={e => setNewReplaceBatsmanInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const name = newReplaceBatsmanInput.trim(); if (name) { addPlayerToTeam(battingTeam, name); doReplaceBatsman(name); setNewReplaceBatsmanInput(''); } } }} />
+              <button className="btn-sm gold" onClick={() => { const name = newReplaceBatsmanInput.trim(); if (name) { addPlayerToTeam(battingTeam, name); doReplaceBatsman(name); setNewReplaceBatsmanInput(''); } }}>Go</button>
+            </div>
             <div className="next-batsman-grid">
               {availableBatsmen.map(p => {
                 const stats = batsmanStats[p];
@@ -815,6 +873,12 @@ export default function Scorecard({ teams, players, matchIndex, matches, ballsPe
         <div className="modal-overlay" onClick={() => setShowBowlerSelect(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <h3>Select Bowler</h3>
+            <div className="inline-player-row" style={{ marginBottom: '10px' }}>
+              <input className="team-input" placeholder="New bowler name..."
+                value={newBowlerModalInput} onChange={e => setNewBowlerModalInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const name = newBowlerModalInput.trim(); if (name) { addPlayerToTeam(bowlingTeam, name); changeBowler(name); setNewBowlerModalInput(''); } } }} />
+              <button className="btn-sm gold" onClick={() => { const name = newBowlerModalInput.trim(); if (name) { addPlayerToTeam(bowlingTeam, name); changeBowler(name); setNewBowlerModalInput(''); } }}>Go</button>
+            </div>
             <div className="bowler-grid">
               {bowlingTeamPlayers.map(p => {
                 const s = bowlerStats[p];

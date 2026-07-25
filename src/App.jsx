@@ -1,16 +1,14 @@
 import { useState, useCallback } from 'react';
 import HomeScreen from './components/HomeScreen';
-import PlayerSetup from './components/PlayerSetup';
 import MatchSelect from './components/MatchSelect';
 import Scorecard from './components/Scorecard';
 import SummaryScreen from './components/SummaryScreen';
 
-const SCREENS = { HOME: 'home', PLAYER_SETUP: 'players', MATCH_SELECT: 'matches', SCORECARD: 'scorecard', SUMMARY: 'summary' };
+const SCREENS = { HOME: 'home', MATCH_SELECT: 'matches', SCORECARD: 'scorecard', SUMMARY: 'summary' };
 
 export default function App() {
   const [screen, setScreen] = useState(SCREENS.HOME);
   const [teams, setTeams] = useState(['', '', '']);
-  const [players, setPlayers] = useState({ 0: [], 1: [], 2: [] });
   const [matches, setMatches] = useState([]);
   const [currentMatch, setCurrentMatch] = useState(null);
   const [dayFinished, setDayFinished] = useState(false);
@@ -21,19 +19,9 @@ export default function App() {
   const handleTeamsSubmit = useCallback((names, bpo) => {
     setTeams(names);
     setBallsPerOver(bpo);
-    setPlayers({ 0: [], 1: [], 2: [] });
-    go(SCREENS.PLAYER_SETUP);
-  }, [go]);
-
-  const handlePlayersSubmit = useCallback((p) => {
-    setPlayers(p);
     setMatches([]);
     go(SCREENS.MATCH_SELECT);
   }, [go]);
-
-  const updatePlayers = useCallback((p) => {
-    setPlayers(p);
-  }, []);
 
   const addMatch = useCallback((t1, t2) => {
     setMatches(prev => [...prev, { t1, t2, completed: false, innings: [], result: '', battingFirst: null }]);
@@ -77,7 +65,6 @@ export default function App() {
 
   const resetAll = useCallback(() => {
     setTeams(['', '', '']);
-    setPlayers({ 0: [], 1: [], 2: [] });
     setMatches([]);
     setCurrentMatch(null);
     setDayFinished(false);
@@ -88,17 +75,13 @@ export default function App() {
   return (
     <div className="app-container">
       {screen === SCREENS.HOME && <HomeScreen onStart={handleTeamsSubmit} />}
-      {screen === SCREENS.PLAYER_SETUP && (
-        <PlayerSetup teams={teams} players={players} onStart={handlePlayersSubmit} onBack={() => go(SCREENS.HOME)} />
-      )}
       {screen === SCREENS.MATCH_SELECT && (
-        <MatchSelect teams={teams} players={players} onUpdatePlayers={updatePlayers} matches={matches} onSelect={openMatch} onBack={resetAll} onUpdateFixture={updateFixture} onAddMatch={addMatch} onDeleteMatch={deleteMatch} onViewResults={finishDay} />
+        <MatchSelect teams={teams} matches={matches} onSelect={openMatch} onBack={resetAll} onUpdateFixture={updateFixture} onAddMatch={addMatch} onDeleteMatch={deleteMatch} onViewResults={finishDay} />
       )}
       {screen === SCREENS.SCORECARD && (
         <Scorecard
           key={currentMatch}
           teams={teams}
-          players={players}
           matchIndex={currentMatch}
           matches={matches}
           ballsPerOver={ballsPerOver}

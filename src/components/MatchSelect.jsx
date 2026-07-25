@@ -1,44 +1,12 @@
 import { useState } from 'react';
 
-export default function MatchSelect({ teams, players, onUpdatePlayers, matches, onSelect, onBack, onUpdateFixture, onAddMatch, onDeleteMatch, onViewResults }) {
-  const anyStarted = matches.some(m => m.innings && m.innings.length > 0);
-  const anyPlayed = matches.some(m => m.innings && m.innings.length > 0);
+export default function MatchSelect({ teams, matches, onSelect, onBack, onUpdateFixture, onAddMatch, onDeleteMatch, onViewResults }) {
   const [newT1, setNewT1] = useState(0);
   const [newT2, setNewT2] = useState(1);
-  const [showPlayerModal, setShowPlayerModal] = useState(false);
-  const [editTeamIdx, setEditTeamIdx] = useState(null);
-  const [editPlayers, setEditPlayers] = useState({});
-  const [newPlayerName, setNewPlayerName] = useState('');
 
   const handleAdd = () => {
     if (newT1 === newT2) return;
     onAddMatch(newT1, newT2);
-  };
-
-  const openPlayerEditor = (teamIdx) => {
-    setEditTeamIdx(teamIdx);
-    setEditPlayers({ ...(players[teamIdx] || []) });
-    setNewPlayerName('');
-    setShowPlayerModal(true);
-  };
-
-  const addPlayerToTeam = () => {
-    const name = newPlayerName.trim();
-    if (!name) return;
-    const updated = { ...players, [editTeamIdx]: [...players[editTeamIdx], name] };
-    onUpdatePlayers(updated);
-    setNewPlayerName('');
-  };
-
-  const removePlayerFromTeam = (playerIdx) => {
-    const updated = { ...players, [editTeamIdx]: players[editTeamIdx].filter((_, i) => i !== playerIdx) };
-    onUpdatePlayers(updated);
-  };
-
-  const renamePlayerInTeam = (playerIdx, newName) => {
-    if (!newName.trim()) return;
-    const updated = { ...players, [editTeamIdx]: players[editTeamIdx].map((p, i) => i === playerIdx ? newName.trim() : p) };
-    onUpdatePlayers(updated);
   };
 
   return (
@@ -46,10 +14,8 @@ export default function MatchSelect({ teams, players, onUpdatePlayers, matches, 
       <div className="screen-header">
         <button className="btn-back" onClick={onBack}>←</button>
         <h2>Select Match</h2>
-        <button className="btn-sm" onClick={() => openPlayerEditor(0)} title="Edit Players">👥</button>
       </div>
 
-      {/* Add new match */}
       <div className="add-match-section">
         <h4>Add Match</h4>
         <div className="fixture-selector">
@@ -66,16 +32,6 @@ export default function MatchSelect({ teams, players, onUpdatePlayers, matches, 
         </div>
       </div>
 
-      {/* Player quick edit buttons */}
-      <div className="quick-player-edit">
-        {teams.map((t, i) => (
-          <button key={i} className="btn-sm" onClick={() => openPlayerEditor(i)}>
-            {t}: {players[i]?.length || 0} players ✎
-          </button>
-        ))}
-      </div>
-
-      {/* Match list */}
       {matches.length === 0 ? (
         <p style={{ textAlign: 'center', color: 'var(--muted)', fontSize: '14px', margin: '30px 0' }}>
           Add a match above to get started
@@ -111,37 +67,6 @@ export default function MatchSelect({ teams, players, onUpdatePlayers, matches, 
           <button className="btn-primary" style={{ marginTop: '20px' }} onClick={onViewResults}>
             🏁 Finished Day — View Results
           </button>
-        </div>
-      )}
-
-      {/* Player Edit Modal */}
-      {showPlayerModal && editTeamIdx !== null && (
-        <div className="modal-overlay" onClick={() => setShowPlayerModal(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <h3>Edit Players — {teams[editTeamIdx]}</h3>
-            <div style={{ maxHeight: '300px', overflowY: 'auto', marginBottom: '12px' }}>
-              {(players[editTeamIdx] || []).map((p, pi) => (
-                <div className="player-row" key={pi}>
-                  <input
-                    value={p}
-                    onChange={(e) => renamePlayerInTeam(pi, e.target.value)}
-                  />
-                  <button className="btn-sm danger" onClick={() => removePlayerFromTeam(pi)}>✕</button>
-                </div>
-              ))}
-            </div>
-            <div className="player-row">
-              <input
-                value={newPlayerName}
-                onChange={(e) => setNewPlayerName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPlayerToTeam(); } }}
-                placeholder="Add player..."
-              />
-              <button className="btn-sm gold" onClick={addPlayerToTeam}>+ Add</button>
-            </div>
-            <div className="player-count">{players[editTeamIdx]?.length || 0} players</div>
-            <button className="btn-secondary" style={{ marginTop: '10px', width: '100%' }} onClick={() => setShowPlayerModal(false)}>Done</button>
-          </div>
         </div>
       )}
     </div>
