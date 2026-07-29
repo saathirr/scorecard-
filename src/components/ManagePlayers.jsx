@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabaseClient';
 
 const ROLES = [
   { value: 'batsman', label: 'Batsman' },
@@ -11,27 +12,95 @@ export default function ManagePlayers({ players, onUpdate, onBack }) {
   const [name, setName] = useState('');
   const [role, setRole] = useState('batsman');
   const [jerseyNo, setJerseyNo] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const addPlayer = () => {
+  // Fetch players from Supabase when the screen loads
+  useEffect(() => {
+    fetchPlayers();
+  }, []);
+
+  const fetchPlayers = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('players')
+      .select('*')
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching players:', error);
+      setLoading(false);
+      return;
+    }
+
+    // Map Supabase rows into the shape the rest of the app expects
+    const mapped = data.map(row => ({
+      id: row.id,
+      name: row.name,
+      role: row.role,
+      jerseyNo: row.jersey_number ? String(row.jersey_number) : '',
+      career: row.career || {
+        runs: 0, balls: 0, fours: 0, sixes: 0, outs: 0, matches: 0,
+        wickets: 0, bowlingBalls: 0, bowlingRuns: 0, bowlingFours: 0, bowlingSixes: 0,
+      },
+    }));
+
+    onUpdate(mapped);
+    setLoading(false);
+  };
+
+  const addPlayer = async () => {
     const n = name.trim();
     if (!n) return;
     if (players.some(p => p.name.toLowerCase() === n.toLowerCase())) {
       alert('Player with this name already exists');
       return;
     }
+
+    setSaving(true);
+    const { data, error } = await supabase
+      .from('players')
+      .insert([{
+        name: n,
+        role,
+        jersey_number: jerseyNo.trim() ? parseInt(jerseyNo.trim(), 10) : null,
+      }])
+      .select();
+
+    setSaving(false);
+
+    if (error) {
+      console.error('Error adding player:', error);
+      alert('Could not save player. Please try again.');
+      return;
+    }
+
+    const row = data[0];
     onUpdate([...players, {
-      id: Date.now().toString(),
-      name: n,
-      role,
-      jerseyNo: jerseyNo.trim(),
+      id: row.id,
+      name: row.name,
+      role: row.role,
+      jerseyNo: row.jersey_number ? String(row.jersey_number) : '',
       career: { runs: 0, balls: 0, fours: 0, sixes: 0, outs: 0, matches: 0, wickets: 0, bowlingBalls: 0, bowlingRuns: 0, bowlingFours: 0, bowlingSixes: 0 },
     }]);
     setName('');
     setJerseyNo('');
   };
 
-  const deletePlayer = (id) => {
+  const deletePlayer = async (id) => {
     if (!window.confirm('Delete this player permanently?')) return;
+
+    const { error } = await supabase
+      .from('players')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error deleting player:', error);
+      alert('Could not delete player. Please try again.');
+      return;
+    }
+
     onUpdate(players.filter(p => p.id !== id));
   };
 
@@ -52,7 +121,11 @@ export default function ManagePlayers({ players, onUpdate, onBack }) {
         <h2>Registered Players</h2>
       </div>
 
-      {players.length === 0 ? (
+      {loading ? (
+        <p style={{ textAlign: 'center', color: 'var(--muted)', fontSize: '14px', margin: '30px 0' }}>
+          Loading players...
+        </p>
+      ) : players.length === 0 ? (
         <p style={{ textAlign: 'center', color: 'var(--muted)', fontSize: '14px', margin: '30px 0' }}>
           No registered players yet. Add your first player below.
         </p>
@@ -120,8 +193,8 @@ export default function ManagePlayers({ players, onUpdate, onBack }) {
             style={{ width: '100px' }}
           />
         </div>
-        <button className="btn-primary" disabled={!name.trim()} onClick={addPlayer}>
-          + Register Player
+        <button className="btn-primary" disabled={!name.trim() || saving} onClick={addPlayer}>
+          {saving ? 'Saving...' : '+ Register Player'}
         </button>
       </div>
     </div>
