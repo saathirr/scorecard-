@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export default function HomeScreen({ onStart }) {
+export default function HomeScreen({ onStart, onManagePlayers }) {
   const [t1, setT1] = useState('Team Alpha');
   const [t2, setT2] = useState('Team Beta');
   const [t3, setT3] = useState('Team Gamma');
@@ -78,6 +78,12 @@ export default function HomeScreen({ onStart }) {
               <span className="format-desc">24 balls per innings</span>
             </button>
           </div>
+        </div>
+
+        <div className="manage-players-btn-wrap">
+          <button type="button" className="btn-secondary" onClick={onManagePlayers} style={{ width: '100%' }}>
+            👥 Manage Registered Players
+          </button>
         </div>
 
         <button type="submit" className="btn-primary">Next → Add Players</button>

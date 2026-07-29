@@ -30,12 +30,12 @@ function snapshot(runs, wickets, balls, batsmanStats, bowlerStats, extras, ballH
   };
 }
 
-export default function Scorecard({ teams, matchIndex, matches, ballsPerOver, updateMatch, onBack, onDone }) {
+export default function Scorecard({ teams, matchIndex, matches, ballsPerOver, updateMatch, onBack, onDone, initialTeamPlayers }) {
   const m = matches[matchIndex];
   const MAX_BALLS = ballsPerOver * 4;
 
   const [phase, setPhase] = useState(m.battingFirst === null ? 'toss' : 'selectOpeners');
-  const [teamPlayers, setTeamPlayers] = useState({});
+  const [teamPlayers, setTeamPlayers] = useState(initialTeamPlayers || {});
   const [currentInnings, setCurrentInnings] = useState(0);
   const [runs, setRuns] = useState(0);
   const [wickets, setWickets] = useState(0);

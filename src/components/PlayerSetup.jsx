@@ -1,7 +1,11 @@
 import { useState } from 'react';
 
-export default function PlayerSetup({ teams, players: initial, onStart, onBack }) {
-  const [players, setPlayers] = useState(initial);
+export default function PlayerSetup({ teams, players: initial, onStart, onBack, registeredPlayers, onRegisterPlayer }) {
+  const [players, setPlayers] = useState({
+    0: [...(initial[0] || [])],
+    1: [...(initial[1] || [])],
+    2: [...(initial[2] || [])],
+  });
   const [newPlayer, setNewPlayer] = useState({ 0: '', 1: '', 2: '' });
 
   const addPlayer = (teamIdx) => {
@@ -23,6 +27,19 @@ export default function PlayerSetup({ teams, players: initial, onStart, onBack }
       e.preventDefault();
       addPlayer(teamIdx);
     }
+  };
+
+  const getAssignedTeam = (playerName) => {
+    for (let i = 0; i < teams.length; i++) {
+      if (players[i].some(p => p.toLowerCase() === playerName.toLowerCase())) return i;
+    }
+    return null;
+  };
+
+  const assignRegistered = (teamIdx, regPlayer) => {
+    const assigned = getAssignedTeam(regPlayer.name);
+    if (assigned !== null) return;
+    setPlayers(prev => ({ ...prev, [teamIdx]: [...prev[teamIdx], regPlayer.name] }));
   };
 
   const allHaveMin = players[0].length >= 2 && players[1].length >= 2 && players[2].length >= 2;
@@ -56,6 +73,33 @@ export default function PlayerSetup({ teams, players: initial, onStart, onBack }
             />
             <button className="btn-sm gold" onClick={() => addPlayer(idx)}>+ Add</button>
           </div>
+
+          {registeredPlayers.length > 0 && (
+            <div className="registered-picks">
+              <label className="registered-picks-label">From Registered Players</label>
+              <div className="registered-picks-chips">
+                {registeredPlayers.map(rp => {
+                  const assigned = getAssignedTeam(rp.name);
+                  const inThisTeam = assigned === idx;
+                  const inOtherTeam = assigned !== null && assigned !== idx;
+                  if (inThisTeam) return null;
+                  return (
+                    <button
+                      key={rp.id}
+                      className={`registered-chip ${inOtherTeam ? 'used' : ''}`}
+                      onClick={() => assignRegistered(idx, rp)}
+                      disabled={inOtherTeam}
+                      title={inOtherTeam ? `Already in ${teams[assigned]}` : rp.role}
+                    >
+                      {rp.name}
+                      {inOtherTeam && <span className="chip-team-tag">{teams[assigned].slice(0, 4)}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="player-count">{players[idx].length} player{players[idx].length !== 1 ? 's' : ''} added</div>
         </div>
       ))}

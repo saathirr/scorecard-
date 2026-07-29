@@ -940,3 +940,162 @@ html, body {
   border-top: 1px solid var(--border);
   margin-top: 4px;
 }
+
+/* Manage Players Button on Home */
+.manage-players-btn-wrap {
+  margin: 16px 0;
+}
+
+/* Player Cards (ManagePlayers screen) */
+.registered-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.player-card {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  animation: slideUp 0.3s ease;
+}
+
+.player-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.player-card-name {
+  flex: 1;
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.player-jersey {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 400;
+  margin-left: 6px;
+  padding: 1px 6px;
+  background: var(--bg2);
+  border-radius: 6px;
+}
+
+.player-card-role {
+  font-size: 11px;
+  color: var(--gold);
+  font-weight: 600;
+  padding: 2px 8px;
+  background: rgba(245,197,24,0.1);
+  border-radius: 8px;
+}
+
+.player-card-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.player-card-stats .stat strong {
+  color: var(--text);
+}
+
+.player-card-stats.no-career {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+/* Register Form */
+.register-form {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  margin-top: 10px;
+}
+
+.register-form h3 {
+  font-size: 15px;
+  margin-bottom: 14px;
+  text-align: center;
+  color: var(--gold);
+}
+
+.register-form-row {
+  margin-bottom: 12px;
+}
+
+.register-form-inline {
+  display: flex;
+  gap: 10px;
+}
+
+.register-select {
+  appearance: none;
+  cursor: pointer;
+}
+
+/* Registered Player Chips in PlayerSetup */
+.registered-picks {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+
+.registered-picks-label {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 6px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.registered-picks-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.registered-chip {
+  padding: 5px 10px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.registered-chip:active { transform: scale(0.95); }
+.registered-chip.used {
+  opacity: 0.35;
+  pointer-events: none;
+  font-size: 11px;
+}
+.registered-chip .chip-team-tag {
+  font-size: 9px;
+  color: var(--muted);
+  background: var(--bg3);
+  padding: 1px 5px;
+  border-radius: 4px;
+}

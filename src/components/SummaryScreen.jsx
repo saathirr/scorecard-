@@ -32,7 +32,7 @@ function aggregateStats(matches, teams) {
   return playerStats;
 }
 
-export default function SummaryScreen({ teams, matches, ballsPerOver, onNew }) {
+export default function SummaryScreen({ teams, matches, ballsPerOver, onNew, registeredPlayers }) {
   const playerStats = aggregateStats(matches, teams);
 
   const points = {};
@@ -192,6 +192,24 @@ export default function SummaryScreen({ teams, matches, ballsPerOver, onNew }) {
               <span className="stat-value">{p.mvp}</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Career Stats Update */}
+      {registeredPlayers && registeredPlayers.filter(p => p.career.matches > 0).length > 0 && (
+        <div className="stats-section">
+          <h3>📊 Career Stats</h3>
+          {registeredPlayers.filter(p => p.career.matches > 0).map((p, i) => {
+            const c = p.career;
+            const batAvg = c.outs > 0 ? (c.runs / c.outs).toFixed(1) : (c.runs > 0 ? `${c.runs}.0` : '-');
+            const econ = c.bowlingBalls > 0 ? (c.bowlingRuns / (c.bowlingBalls / ballsPerOver)).toFixed(1) : '-';
+            return (
+              <div className="stat-row" key={p.id || i} style={{ animationDelay: `${i * 0.05}s` }}>
+                <span className="stat-player">{p.name}</span>
+                <span className="stat-detail">{c.matches}m • {c.runs}r • {c.wickets}w • Avg {batAvg} • Econ {econ}</span>
+              </div>
+            );
+          })}
         </div>
       )}
 
